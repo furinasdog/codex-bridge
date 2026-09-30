@@ -37,6 +37,7 @@ export interface DashboardResponse {
       plan_type?: string
       balance: number | null
       has_credits: boolean | null
+      unlimited: boolean | null
       primary: LimitWindow
       secondary: LimitWindow
       last_updated: string | null

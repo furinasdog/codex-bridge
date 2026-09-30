@@ -35,6 +35,7 @@ func New(cfg config.Config, tokens openai.TokenProvider, version string) *Server
 	client := openai.NewClient(cfg.UpstreamURL, tokens, nil, cfg.ForwardUserAgent+"/"+version)
 	store := telemetry.New(cfg.TelemetryPath)
 	client.SetResponseObserver(store.UpdateQuota)
+	client.SetEventObserver(store.UpdateQuotaEvent)
 	catalog := models.NewCatalog(cfg.HaikuModel, cfg.SonnetModel, cfg.OpusModel)
 	handler := anthropic.NewHandler(client, catalog, store, cfg.RequestBodyLimit, cfg.RequestTimeout)
 	router := NewRouter(cfg, handler, store, catalog)

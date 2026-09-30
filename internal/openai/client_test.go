@@ -56,6 +56,30 @@ func TestClientObservesResponseHeaders(t *testing.T) {
 	}
 }
 
+func TestClientObservesRateLimitEvents(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "text/event-stream")
+		_, _ = writer.Write([]byte("data: {\"type\":\"codex.rate_limits\",\"plan_type\":\"pro\",\"rate_limits\":{\"primary\":{\"used_percent\":20,\"window_minutes\":300}},\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":\"0\"}}\n\n"))
+		_, _ = writer.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"r1\"}}\n\n"))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, staticToken("token"), server.Client(), "test")
+	observed := make(chan StreamEvent, 1)
+	client.SetEventObserver(func(event StreamEvent) {
+		if event.Type == "codex.rate_limits" {
+			observed <- event
+		}
+	})
+	if err := client.Stream(context.Background(), ResponseRequest{}, func(StreamEvent) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	event := <-observed
+	if event.PlanType != "pro" || event.RateLimits == nil || event.RateLimits.Primary == nil || event.RateLimits.Primary.UsedPercent == nil || *event.RateLimits.Primary.UsedPercent != 20 {
+		t.Fatalf("unexpected rate-limit event: %#v", event)
+	}
+}
+
 func TestClientRequiresCompletedEvent(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {

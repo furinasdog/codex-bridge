@@ -15,7 +15,7 @@ The design follows the provider and protocol-adapter separation used by [`@earen
 - Configured Codex model discovery through `GET /v1/models`
 - Native Haiku, Sonnet, and Opus choices that use real upstream model IDs end to end
 - Safe, idempotent Claude Code `settings.json` configuration with automatic backups and `modelPicker` capability mappings
-- Embedded Vue dashboard with English and Chinese UI, 1/5/12/24-hour usage charts, service health, and Codex quota metadata
+- Embedded Vue dashboard with English and Chinese UI, dual-scale 1/5/12/24-hour usage charts, service health, and Codex quota metadata
 - OAuth 2.0 authorization code flow with PKCE, state, nonce, and OIDC signature validation
 - Automatic, concurrency-safe access-token refresh and rotating refresh-token persistence
 - Public OpenAI Responses API only; every request uses `store: false` and `stream: true`
@@ -128,6 +128,10 @@ checkout already includes the generated assets, so Go-only builds also work.
 
    Open `http://127.0.0.1:8787/` for the local dashboard. Its metrics endpoint
    is restricted to loopback clients and never exposes OAuth credentials.
+   Subscription windows and optional credit information are collected from
+   Codex response headers or `codex.rate_limits` stream events. Plans without
+   separately purchased credits are shown as having no extra credits rather
+   than an unknown balance.
 
 4. Start or restart Claude Code, then use `/model` to choose **Codex Haiku**,
    **Codex Sonnet**, or **Codex Opus**.

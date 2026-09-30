@@ -42,8 +42,10 @@ and 24 hours. The store persists only the rolling 24-hour window in the user's
 configuration directory.
 
 Codex plan, credit, and rate-window values are captured from response headers
-when OpenAI provides them. Missing values remain unknown; the bridge does not
-estimate subscription balance. OAuth tokens and request content never enter the
+and `codex.rate_limits` stream events when OpenAI provides them. Missing values
+remain unknown; the bridge does not estimate subscription balance. Accounts
+without separately purchased credits are distinguished from accounts whose
+credit state was not reported. OAuth tokens and request content never enter the
 telemetry store or dashboard response.
 
 ## Authentication lifecycle

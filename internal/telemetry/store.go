@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/codex-bridge/codex-bridge/internal/openai"
 )
 
 const retention = 24 * time.Hour
@@ -35,6 +37,7 @@ type Quota struct {
 	PlanType    string      `json:"plan_type,omitempty"`
 	Balance     *float64    `json:"balance"`
 	HasCredits  *bool       `json:"has_credits"`
+	Unlimited   *bool       `json:"unlimited"`
 	Primary     LimitWindow `json:"primary"`
 	Secondary   LimitWindow `json:"secondary"`
 	LastUpdated *time.Time  `json:"last_updated"`
@@ -123,8 +126,32 @@ func (s *Store) UpdateQuota(header http.Header) {
 	changed = setString(&s.quota.PlanType, header.Get("X-Codex-Plan-Type")) || changed
 	changed = setFloat(&s.quota.Balance, header.Get("X-Codex-Credits-Balance")) || changed
 	changed = setBool(&s.quota.HasCredits, header.Get("X-Codex-Credits-Has-Credits")) || changed
+	changed = setBool(&s.quota.Unlimited, header.Get("X-Codex-Credits-Unlimited")) || changed
 	changed = setWindow(&s.quota.Primary, header, "Primary") || changed
 	changed = setWindow(&s.quota.Secondary, header, "Secondary") || changed
+	if changed {
+		s.quota.LastUpdated = &now
+		s.saveLocked()
+	}
+	s.mu.Unlock()
+}
+
+func (s *Store) UpdateQuotaEvent(event openai.StreamEvent) {
+	if event.Type != "codex.rate_limits" {
+		return
+	}
+	now := time.Now().UTC()
+	s.mu.Lock()
+	changed := setString(&s.quota.PlanType, event.PlanType)
+	if event.RateLimits != nil {
+		changed = setEventWindow(&s.quota.Primary, event.RateLimits.Primary) || changed
+		changed = setEventWindow(&s.quota.Secondary, event.RateLimits.Secondary) || changed
+	}
+	if event.Credits != nil {
+		changed = setBoolValue(&s.quota.HasCredits, event.Credits.HasCredits) || changed
+		changed = setBoolValue(&s.quota.Unlimited, event.Credits.Unlimited) || changed
+		changed = setFloatValue(&s.quota.Balance, parseBalance(event.Credits.Balance)) || changed
+	}
 	if changed {
 		s.quota.LastUpdated = &now
 		s.saveLocked()
@@ -257,6 +284,45 @@ func setWindow(window *LimitWindow, header http.Header, name string) bool {
 	return changed
 }
 
+func setEventWindow(target *LimitWindow, source *openai.RateLimitWindow) bool {
+	if source == nil {
+		return false
+	}
+	changed := setFloatValue(&target.UsedPercent, source.UsedPercent)
+	changed = setIntValue(&target.WindowMinutes, source.WindowMinutes) || changed
+	if source.ResetAt != nil {
+		resetAt := time.Unix(*source.ResetAt, 0).UTC()
+		changed = setTimeValue(&target.ResetAt, &resetAt) || changed
+	}
+	if target.UsedPercent != nil {
+		remaining := 100 - *target.UsedPercent
+		if remaining < 0 {
+			remaining = 0
+		}
+		target.RemainingPercent = &remaining
+	}
+	return changed
+}
+
+func parseBalance(raw json.RawMessage) *float64 {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var number float64
+	if json.Unmarshal(raw, &number) == nil {
+		return &number
+	}
+	var text string
+	if json.Unmarshal(raw, &text) != nil {
+		return nil
+	}
+	parsed, err := strconv.ParseFloat(text, 64)
+	if err != nil {
+		return nil
+	}
+	return &parsed
+}
+
 func setString(target *string, value string) bool {
 	if value == "" || *target == value {
 		return false
@@ -280,6 +346,15 @@ func setFloat(target **float64, value string) bool {
 	return true
 }
 
+func setFloatValue(target **float64, value *float64) bool {
+	if value == nil || (*target != nil && **target == *value) {
+		return false
+	}
+	copy := *value
+	*target = &copy
+	return true
+}
+
 func setInt(target **int, value string) bool {
 	if value == "" {
 		return false
@@ -292,6 +367,15 @@ func setInt(target **int, value string) bool {
 		return false
 	}
 	*target = &parsed
+	return true
+}
+
+func setIntValue(target **int, value *int) bool {
+	if value == nil || (*target != nil && **target == *value) {
+		return false
+	}
+	copy := *value
+	*target = &copy
 	return true
 }
 
@@ -310,6 +394,15 @@ func setBool(target **bool, value string) bool {
 	return true
 }
 
+func setBoolValue(target **bool, value *bool) bool {
+	if value == nil || (*target != nil && **target == *value) {
+		return false
+	}
+	copy := *value
+	*target = &copy
+	return true
+}
+
 func setTime(target **time.Time, value string) bool {
 	if value == "" {
 		return false
@@ -323,6 +416,15 @@ func setTime(target **time.Time, value string) bool {
 		return false
 	}
 	*target = &parsed
+	return true
+}
+
+func setTimeValue(target **time.Time, value *time.Time) bool {
+	if value == nil || (*target != nil && (*target).Equal(*value)) {
+		return false
+	}
+	copy := *value
+	*target = &copy
 	return true
 }
 

@@ -28,14 +28,35 @@ type Tool struct {
 }
 
 type StreamEvent struct {
-	Type         string         `json:"type"`
-	Delta        string         `json:"delta,omitempty"`
-	ItemID       string         `json:"item_id,omitempty"`
-	OutputIndex  int            `json:"output_index,omitempty"`
-	ContentIndex int            `json:"content_index,omitempty"`
-	Item         *OutputItem    `json:"item,omitempty"`
-	Response     *Response      `json:"response,omitempty"`
-	Error        *ResponseError `json:"error,omitempty"`
+	Type             string            `json:"type"`
+	Delta            string            `json:"delta,omitempty"`
+	ItemID           string            `json:"item_id,omitempty"`
+	OutputIndex      int               `json:"output_index,omitempty"`
+	ContentIndex     int               `json:"content_index,omitempty"`
+	Item             *OutputItem       `json:"item,omitempty"`
+	Response         *Response         `json:"response,omitempty"`
+	Error            *ResponseError    `json:"error,omitempty"`
+	PlanType         string            `json:"plan_type,omitempty"`
+	RateLimits       *RateLimitDetails `json:"rate_limits,omitempty"`
+	Credits          *Credits          `json:"credits,omitempty"`
+	MeteredLimitName string            `json:"metered_limit_name,omitempty"`
+}
+
+type RateLimitDetails struct {
+	Primary   *RateLimitWindow `json:"primary,omitempty"`
+	Secondary *RateLimitWindow `json:"secondary,omitempty"`
+}
+
+type RateLimitWindow struct {
+	UsedPercent   *float64 `json:"used_percent,omitempty"`
+	WindowMinutes *int     `json:"window_minutes,omitempty"`
+	ResetAt       *int64   `json:"reset_at,omitempty"`
+}
+
+type Credits struct {
+	HasCredits *bool           `json:"has_credits,omitempty"`
+	Unlimited  *bool           `json:"unlimited,omitempty"`
+	Balance    json.RawMessage `json:"balance,omitempty"`
 }
 
 type OutputItem struct {

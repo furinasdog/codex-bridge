@@ -27,3 +27,5 @@ All notable changes to this project will be documented in this file. The format 
 - Write real configured model IDs into Claude Code settings and forward request model names without server-side translation.
 - Replace JSON request logging with Gin's colored console logger and readable text service logs.
 - Produce the native `.exe` filename from `make` on Windows and avoid unnecessary dashboard rebuilds.
+- Read Codex subscription windows and credit state from `codex.rate_limits` stream events when response headers omit them.
+- Give input and output token series independent chart scales so small output totals remain visible.

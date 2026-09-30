@@ -42,6 +42,7 @@ func TestMessagesEndToEnd(t *testing.T) {
 			t.Fatalf("Codex subscription endpoint does not accept max_output_tokens: %s", body)
 		}
 		writer.Header().Set("Content-Type", "text/event-stream")
+		_, _ = writer.Write([]byte("data: {\"type\":\"codex.rate_limits\",\"plan_type\":\"pro\",\"rate_limits\":{\"primary\":{\"used_percent\":20,\"window_minutes\":300}},\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":\"0\"}}\n\n"))
 		_, _ = writer.Write([]byte("data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\n"))
 		_, _ = writer.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello\"}\n\n"))
 		_, _ = writer.Write([]byte("data: {\"type\":\"response.output_text.done\"}\n\n"))
@@ -53,6 +54,8 @@ func TestMessagesEndToEnd(t *testing.T) {
 	client := openai.NewClient(upstream.URL, testToken{}, upstream.Client(), "test")
 	catalog := models.NewCatalog("gpt-fast", "gpt-test", "gpt-power")
 	store := telemetry.New("")
+	client.SetResponseObserver(store.UpdateQuota)
+	client.SetEventObserver(store.UpdateQuotaEvent)
 	handler := anthropic.NewHandler(client, catalog, store, 1<<20, time.Minute)
 	router := NewRouter(cfg, handler, store, catalog)
 	body := []byte(`{"model":"gpt-test","max_tokens":128,"messages":[{"role":"user","content":"hi"}]}`)
@@ -81,6 +84,13 @@ func TestMessagesEndToEnd(t *testing.T) {
 	}
 	if response.ID != "msg_resp_1" || response.Model != "gpt-test" || response.Content[0].Text != "hello" {
 		t.Fatalf("unexpected response: %#v", response)
+	}
+	snapshot := store.Snapshot(time.Now())
+	if snapshot.Quota.Primary.RemainingPercent == nil || *snapshot.Quota.Primary.RemainingPercent != 80 {
+		t.Fatalf("quota was not captured from the stream: %#v", snapshot.Quota)
+	}
+	if got := snapshot.Ranges["1h"].Totals.OutputTokens; got != 1 {
+		t.Fatalf("output tokens = %d, want 1", got)
 	}
 }
 

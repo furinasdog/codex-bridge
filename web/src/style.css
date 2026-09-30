@@ -38,6 +38,9 @@ button { font: inherit; }
 .panel-heading h2 { margin: 0; font-size: 15px; font-weight: 620; }
 .panel-heading p { margin: 6px 0 0; color: #858983; font-size: 12px; }
 .panel-heading > strong { font-size: 20px; font-weight: 570; }
+.quota-balance { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.quota-balance small { color: #898d87; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.quota-balance strong { font-size: 15px; font-weight: 600; }
 .range-tabs { display: flex; gap: 2px; background: #f2f2ef; padding: 3px; }
 .range-tabs button { min-width: 42px; padding: 6px 9px; font-size: 12px; }
 .range-tabs button.active { background: #fff; color: #171918; box-shadow: 0 1px 2px rgb(0 0 0 / 9%); }
@@ -52,6 +55,8 @@ button { font: inherit; }
 .line-total { stroke: #252826; }
 .line-output { stroke: #3e9871; }
 .axis-label, .empty-label { fill: #8b8f89; font: 11px ui-sans-serif, system-ui, sans-serif; }
+.axis-input { fill: #4f534f; }
+.axis-output { fill: #3e9871; }
 .empty-label { font-size: 12px; }
 .two-column { display: grid; grid-template-columns: 1.25fr .75fr; gap: 18px; }
 .quota-row { padding: 20px 22px; border-bottom: 1px solid #ecece8; }

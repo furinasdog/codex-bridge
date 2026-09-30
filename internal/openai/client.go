@@ -17,15 +17,20 @@ type TokenProvider interface {
 }
 
 type Client struct {
-	baseURL   string
-	tokens    TokenProvider
-	http      *http.Client
-	userAgent string
-	observer  func(http.Header)
+	baseURL       string
+	tokens        TokenProvider
+	http          *http.Client
+	userAgent     string
+	observer      func(http.Header)
+	eventObserver func(StreamEvent)
 }
 
 func (c *Client) SetResponseObserver(observer func(http.Header)) {
 	c.observer = observer
+}
+
+func (c *Client) SetEventObserver(observer func(StreamEvent)) {
+	c.eventObserver = observer
 }
 
 type APIError struct {
@@ -77,7 +82,12 @@ func (c *Client) Stream(ctx context.Context, input ResponseRequest, handle func(
 	if response.StatusCode != http.StatusOK {
 		return decodeAPIError(response)
 	}
-	return consumeSSE(response.Body, handle)
+	return consumeSSE(response.Body, func(event StreamEvent) error {
+		if c.eventObserver != nil {
+			c.eventObserver(event)
+		}
+		return handle(event)
+	})
 }
 
 func consumeSSE(reader io.Reader, handle func(StreamEvent) error) error {

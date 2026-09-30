@@ -48,6 +48,15 @@ function remaining(window: LimitWindow) {
   return window.remaining_percent == null ? t('unknown') : `${number(window.remaining_percent, false)}%`
 }
 
+function creditBalance() {
+  const quota = data.value?.service.quota
+  if (!quota) return t('unknown')
+  if (quota.unlimited) return t('unlimited')
+  if (quota.has_credits === false) return t('noExtraCredits')
+  if (quota.balance != null) return number(quota.balance, false)
+  return t('unknown')
+}
+
 onMounted(() => {
   document.documentElement.lang = locale.value
   load()
@@ -99,7 +108,7 @@ onBeforeUnmount(() => {
 
       <section class="two-column">
         <article class="panel quota-panel">
-          <div class="panel-heading"><div><h2>{{ t('quota') }}</h2><p>{{ data.service.quota.plan_type || t('unknown') }}</p></div><strong v-if="data.service.quota.balance != null">{{ number(data.service.quota.balance, false) }}</strong></div>
+          <div class="panel-heading"><div><h2>{{ t('quota') }}</h2><p>{{ data.service.quota.plan_type || t('unknown') }}</p></div><div class="quota-balance"><small>{{ t('balance') }}</small><strong>{{ creditBalance() }}</strong></div></div>
           <div class="quota-row" v-for="item in [{ label: t('primary'), value: data.service.quota.primary }, { label: t('secondary'), value: data.service.quota.secondary }]" :key="item.label">
             <div><span>{{ item.label }}</span><strong>{{ remaining(item.value) }}</strong></div>
             <div class="meter"><i :style="{ width: `${item.value.remaining_percent ?? 0}%` }"></i></div>

@@ -1,10 +1,13 @@
 package telemetry
 
 import (
+	"encoding/json"
 	"net/http"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/codex-bridge/codex-bridge/internal/openai"
 )
 
 func TestStoreBuildsRangesAndPersists(t *testing.T) {
@@ -29,6 +32,31 @@ func TestStoreBuildsRangesAndPersists(t *testing.T) {
 	reloaded := New(path).Snapshot(now)
 	if got := reloaded.Ranges["5h"].Totals.OutputTokens; got != 40 {
 		t.Fatalf("persisted output tokens = %d, want 40", got)
+	}
+}
+
+func TestStoreReadsCodexQuotaEvent(t *testing.T) {
+	t.Parallel()
+	store := New("")
+	used, minutes, reset := 12.5, 300, int64(1790755200)
+	hasCredits, unlimited := false, false
+	store.UpdateQuotaEvent(openai.StreamEvent{
+		Type: "codex.rate_limits", PlanType: "pro",
+		RateLimits: &openai.RateLimitDetails{Primary: &openai.RateLimitWindow{
+			UsedPercent: &used, WindowMinutes: &minutes, ResetAt: &reset,
+		}},
+		Credits: &openai.Credits{HasCredits: &hasCredits, Unlimited: &unlimited, Balance: json.RawMessage(`"0"`)},
+	})
+
+	quota := store.Snapshot(time.Now()).Quota
+	if quota.PlanType != "pro" || quota.Primary.RemainingPercent == nil || *quota.Primary.RemainingPercent != 87.5 {
+		t.Fatalf("unexpected quota: %#v", quota)
+	}
+	if quota.HasCredits == nil || *quota.HasCredits || quota.Unlimited == nil || *quota.Unlimited {
+		t.Fatalf("unexpected credits flags: %#v", quota)
+	}
+	if quota.Balance == nil || *quota.Balance != 0 || quota.LastUpdated == nil {
+		t.Fatalf("unexpected credits balance: %#v", quota)
 	}
 }
 
