@@ -72,38 +72,6 @@ func (c *Client) Stream(ctx context.Context, input ResponseRequest, handle func(
 	return consumeSSE(response.Body, handle)
 }
 
-func (c *Client) Models(ctx context.Context) ([]Model, error) {
-	token, err := c.tokens.Token(ctx)
-	if err != nil {
-		return nil, err
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/models", nil)
-	if err != nil {
-		return nil, err
-	}
-	request.Header.Set("Authorization", "Bearer "+token)
-	request.Header.Set("User-Agent", c.userAgent)
-	response, err := c.http.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("list OpenAI models: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil, decodeAPIError(response)
-	}
-	var body struct {
-		Models []Model `json:"models"`
-		Data   []Model `json:"data"`
-	}
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		return nil, fmt.Errorf("decode OpenAI model list: %w", err)
-	}
-	if len(body.Models) > 0 {
-		return body.Models, nil
-	}
-	return body.Data, nil
-}
-
 func consumeSSE(reader io.Reader, handle func(StreamEvent) error) error {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 64<<10), 16<<20)

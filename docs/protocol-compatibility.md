@@ -6,6 +6,7 @@ Codex Bridge implements the subset of the Anthropic Messages API commonly used b
 | --- | --- | --- |
 | Text input and output | Supported | Strings and text content blocks |
 | System prompt | Supported | String or text-block array, joined as Responses instructions |
+| Message-level `system` and `developer` roles | Supported | Claude Code gateway scaffolding is merged into Responses instructions |
 | Streaming | Supported | Anthropic SSE event sequence |
 | Non-streaming | Supported | Aggregated from a mandatory upstream stream |
 | Tools | Supported | JSON Schema is forwarded as a Responses function tool |
@@ -15,6 +16,7 @@ Codex Bridge implements the subset of the Anthropic Messages API commonly used b
 | URL images | Supported | Forwarded as input-image URLs |
 | Prompt caching controls | Ignored | OpenAI caching is automatic; request session IDs become a clamped cache key |
 | `temperature` and `top_p` | Forwarded | Model support is decided upstream |
+| `max_tokens` | Accepted, provider-managed | Required by Anthropic clients but not forwarded because the Codex subscription endpoint rejects `max_output_tokens` |
 | `top_k` | Ignored | No direct Responses API equivalent |
 | Stop sequences | Ignored | No portable equivalent for the supported Responses flow |
 | Token counting | Estimated | UTF-8 JSON size divided by four; final response usage is authoritative |
@@ -34,18 +36,22 @@ The bridge exposes three stable virtual tiers and resolves native Claude aliases
 
 The defaults can be changed independently with `CODEX_BRIDGE_HAIKU_MODEL`,
 `CODEX_BRIDGE_SONNET_MODEL`, and `CODEX_BRIDGE_OPUS_MODEL`. Unknown model IDs
-pass through unchanged to support models discovered for a particular account.
-The inbound `model` value is preserved in Anthropic responses for client
-consistency. `GET /v1/models` advertises only virtual tiers whose configured
-target is visible in the signed-in account's current model catalog.
+pass through unchanged to support explicitly configured provider models. The
+inbound `model` value is preserved in Anthropic responses for client consistency.
+`GET /v1/models` always advertises the three configured virtual tiers; the Codex
+inference endpoint remains authoritative for account access because its
+model-list response can omit models that are callable.
 
 ## Claude Code setup
 
 `codex-bridge configure-claude` merges the base URL, Bearer authentication token,
-three tier aliases, display names, and model-discovery controls into Claude Code's
-user-level `settings.json`. Existing keys are preserved, an existing file is
-backed up before modification, and an invalid JSON file is left untouched. The
-command uses `CLAUDE_CONFIG_DIR` when set and otherwise uses `~/.claude/settings.json`.
+three tier aliases, display names, and a `modelPicker` lineup into Claude Code's
+user-level `settings.json`. Each generated row carries a `behavesAs` mapping so
+Claude Code applies a known capability profile without warning about an unknown
+model. Existing picker rows and unrelated keys are preserved, an existing file
+is backed up before modification, and an invalid JSON file is left untouched.
+The command uses `CLAUDE_CONFIG_DIR` when set and otherwise uses
+`~/.claude/settings.json`.
 
 ## Errors
 

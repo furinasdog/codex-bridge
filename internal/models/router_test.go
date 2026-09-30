@@ -3,8 +3,6 @@ package models
 import (
 	"reflect"
 	"testing"
-
-	"github.com/codex-bridge/codex-bridge/internal/openai"
 )
 
 func TestResolve(t *testing.T) {
@@ -31,18 +29,14 @@ func TestResolve(t *testing.T) {
 	}
 }
 
-func TestAdvertisedModelsOnlyIncludesAvailableTargets(t *testing.T) {
+func TestAdvertisedModelsIncludesEveryConfiguredTier(t *testing.T) {
 	t.Parallel()
 	router := NewRouter("fast", "balanced", "powerful")
-	catalog := []openai.Model{
-		{Slug: "fast", Visibility: "list"},
-		{ID: "balanced"},
-		{Slug: "powerful", Visibility: "hidden"},
-	}
-	actual := router.AdvertisedModels(catalog)
+	actual := router.AdvertisedModels()
 	want := []Advertised{
 		{ID: HaikuAlias, DisplayName: "Codex Haiku (fast)", Target: "fast"},
 		{ID: SonnetAlias, DisplayName: "Codex Sonnet (balanced)", Target: "balanced"},
+		{ID: OpusAlias, DisplayName: "Codex Opus (powerful)", Target: "powerful"},
 	}
 	if !reflect.DeepEqual(actual, want) {
 		t.Fatalf("AdvertisedModels() = %#v, want %#v", actual, want)

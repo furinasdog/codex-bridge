@@ -37,6 +37,9 @@ func TestMessagesEndToEnd(t *testing.T) {
 		if payload["store"] != false || payload["stream"] != true || payload["model"] != "gpt-test" {
 			t.Fatalf("unexpected upstream payload: %s", body)
 		}
+		if _, exists := payload["max_output_tokens"]; exists {
+			t.Fatalf("Codex subscription endpoint does not accept max_output_tokens: %s", body)
+		}
 		writer.Header().Set("Content-Type", "text/event-stream")
 		_, _ = writer.Write([]byte("data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\n"))
 		_, _ = writer.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello\"}\n\n"))
@@ -90,6 +93,37 @@ func TestClaudeHelloProbe(t *testing.T) {
 		router.ServeHTTP(recorder, httptest.NewRequest(method, "/api/hello", nil))
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("%s /api/hello status = %d", method, recorder.Code)
+		}
+	}
+}
+
+func TestModelsAdvertisesAllVirtualTiers(t *testing.T) {
+	t.Parallel()
+	cfg := config.Config{}
+	client := openai.NewClient("http://127.0.0.1", testToken{}, nil, "test")
+	handler := anthropic.NewHandler(client, models.NewRouter("fast", "balanced", "powerful"), 1<<20, time.Minute)
+	router := NewRouter(cfg, handler)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET /v1/models status = %d", recorder.Code)
+	}
+	var response struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{models.HaikuAlias, models.SonnetAlias, models.OpusAlias}
+	if len(response.Data) != len(want) {
+		t.Fatalf("models = %#v, want %v", response.Data, want)
+	}
+	for index, id := range want {
+		if response.Data[index].ID != id {
+			t.Fatalf("models[%d] = %q, want %q", index, response.Data[index].ID, id)
 		}
 	}
 }

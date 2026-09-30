@@ -59,3 +59,26 @@ func TestConvertRequestClampsCacheKey(t *testing.T) {
 		t.Fatalf("cache key length = %d, want 64", len(converted.PromptCacheKey))
 	}
 }
+
+func TestConvertRequestMergesMessageLevelInstructions(t *testing.T) {
+	t.Parallel()
+	request := MessageRequest{
+		MaxTokens: 32,
+		System:    json.RawMessage(`"top-level"`),
+		Messages: []Message{
+			{Role: "system", Content: json.RawMessage(`[{"type":"text","text":"Claude harness"}]`)},
+			{Role: "user", Content: json.RawMessage(`"hello"`)},
+			{Role: "developer", Content: json.RawMessage(`"gateway policy"`)},
+		},
+	}
+	converted, err := ConvertRequest(request, "model", "key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if converted.Instructions != "top-level\n\nClaude harness\n\ngateway policy" {
+		t.Fatalf("instructions = %q", converted.Instructions)
+	}
+	if len(converted.Input) != 1 || converted.Input[0]["role"] != "user" {
+		t.Fatalf("unexpected input: %#v", converted.Input)
+	}
+}

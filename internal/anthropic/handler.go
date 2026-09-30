@@ -85,20 +85,13 @@ func (h *Handler) stream(c *gin.Context, ctx context.Context, model string, upst
 }
 
 func (h *Handler) Models(c *gin.Context) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
-	defer cancel()
-	models, err := h.client.Models(ctx)
-	if err != nil {
-		writeMappedError(c, err)
-		return
-	}
 	type modelResponse struct {
 		ID          string `json:"id"`
 		Type        string `json:"type"`
 		DisplayName string `json:"display_name,omitempty"`
 		CreatedAt   string `json:"created_at,omitempty"`
 	}
-	advertised := h.models.AdvertisedModels(models)
+	advertised := h.models.AdvertisedModels()
 	data := make([]modelResponse, 0, len(advertised))
 	for _, model := range advertised {
 		data = append(data, modelResponse{ID: model.ID, Type: "model", DisplayName: model.DisplayName})

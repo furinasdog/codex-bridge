@@ -20,14 +20,29 @@ func ConvertRequest(input MessageRequest, upstreamModel, cacheKey string) (opena
 	if err != nil {
 		return openai.ResponseRequest{}, err
 	}
+	instructionParts := make([]string, 0, 2)
+	if instructions != "" {
+		instructionParts = append(instructionParts, instructions)
+	}
 	items := make([]openai.InputItem, 0, len(input.Messages))
 	for index, message := range input.Messages {
+		if message.Role == "system" || message.Role == "developer" {
+			text, parseErr := parseSystem(message.Content)
+			if parseErr != nil {
+				return openai.ResponseRequest{}, fmt.Errorf("messages[%d]: %w", index, parseErr)
+			}
+			if text != "" {
+				instructionParts = append(instructionParts, text)
+			}
+			continue
+		}
 		converted, err := convertMessage(message)
 		if err != nil {
 			return openai.ResponseRequest{}, fmt.Errorf("messages[%d]: %w", index, err)
 		}
 		items = append(items, converted...)
 	}
+	instructions = strings.Join(instructionParts, "\n\n")
 	tools := make([]openai.Tool, 0, len(input.Tools))
 	for index, tool := range input.Tools {
 		if tool.Name == "" || len(tool.InputSchema) == 0 || !json.Valid(tool.InputSchema) {
@@ -44,7 +59,7 @@ func ConvertRequest(input MessageRequest, upstreamModel, cacheKey string) (opena
 	}
 	return openai.ResponseRequest{
 		Model: upstreamModel, Instructions: instructions, Input: items, Tools: tools,
-		ToolChoice: toolChoice, MaxOutputTokens: input.MaxTokens, Temperature: input.Temperature,
+		ToolChoice: toolChoice, Temperature: input.Temperature,
 		TopP: input.TopP, ParallelToolCalls: parallel, Store: false, Stream: true,
 		PromptCacheKey: cacheKey,
 	}, nil
@@ -74,7 +89,7 @@ func parseSystem(raw json.RawMessage) (string, error) {
 
 func convertMessage(message Message) ([]openai.InputItem, error) {
 	if message.Role != "user" && message.Role != "assistant" {
-		return nil, fmt.Errorf("role must be user or assistant")
+		return nil, fmt.Errorf("role %q must be user or assistant", message.Role)
 	}
 	var text string
 	if json.Unmarshal(message.Content, &text) == nil {

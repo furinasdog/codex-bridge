@@ -87,7 +87,6 @@ func Configure(options ConfigureOptions) (ConfigureResult, error) {
 		"ANTHROPIC_DEFAULT_OPUS_MODEL":                   models.OpusAlias,
 		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":              "Codex Opus",
 		"ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION":       "Powerful Codex tier backed by " + options.Models.Opus,
-		"CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY":     "1",
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":       "1",
 		"CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING": "1",
 	}
@@ -97,7 +96,13 @@ func Configure(options ConfigureOptions) (ConfigureResult, error) {
 	// A real Anthropic API key takes precedence over gateway authentication in
 	// Claude Code. Remove a file-scoped value so the bridge Bearer token wins.
 	delete(environment, "ANTHROPIC_API_KEY")
+	// modelPicker is the stable way to describe custom gateway IDs. Discovery
+	// can produce a second bare row without behavesAs on some Claude versions.
+	delete(environment, "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY")
 	root["env"] = environment
+	if err := mergeModelPicker(root); err != nil {
+		return ConfigureResult{}, err
+	}
 
 	formatted, err := json.MarshalIndent(root, "", "  ")
 	if err != nil {
@@ -122,6 +127,45 @@ func Configure(options ConfigureOptions) (ConfigureResult, error) {
 	}
 	result.Changed = true
 	return result, nil
+}
+
+func mergeModelPicker(root map[string]any) error {
+	picker := make(map[string]any)
+	if existing, exists := root["modelPicker"]; exists {
+		object, ok := existing.(map[string]any)
+		if !ok {
+			return fmt.Errorf("Claude settings modelPicker value must be a JSON object")
+		}
+		picker = object
+	}
+	options := make([]any, 0, 3)
+	if existing, exists := picker["options"]; exists {
+		rows, ok := existing.([]any)
+		if !ok {
+			return fmt.Errorf("Claude settings modelPicker.options value must be a JSON array")
+		}
+		for _, row := range rows {
+			object, ok := row.(map[string]any)
+			if !ok {
+				return fmt.Errorf("Claude settings modelPicker.options entries must be JSON objects")
+			}
+			model, _ := object["model"].(string)
+			if model != models.HaikuAlias && model != models.SonnetAlias && model != models.OpusAlias {
+				options = append(options, row)
+			}
+		}
+	}
+	options = append(options,
+		map[string]any{"model": models.HaikuAlias, "label": "Codex Haiku", "description": "Fast Codex tier", "behavesAs": "claude-haiku-4-5"},
+		map[string]any{"model": models.SonnetAlias, "label": "Codex Sonnet", "description": "Balanced Codex tier", "behavesAs": "claude-sonnet-4-5"},
+		map[string]any{"model": models.OpusAlias, "label": "Codex Opus", "description": "Powerful Codex tier", "behavesAs": "claude-opus-4-6"},
+	)
+	picker["options"] = options
+	if _, exists := picker["replaceBuiltInOptions"]; !exists {
+		picker["replaceBuiltInOptions"] = true
+	}
+	root["modelPicker"] = picker
+	return nil
 }
 
 func writeAtomic(path string, data []byte) error {

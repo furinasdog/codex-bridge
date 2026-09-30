@@ -3,8 +3,6 @@ package models
 import (
 	"fmt"
 	"strings"
-
-	"github.com/codex-bridge/codex-bridge/internal/openai"
 )
 
 const (
@@ -47,25 +45,12 @@ func (r Router) Resolve(requested string) string {
 	}
 }
 
-func (r Router) AdvertisedModels(catalog []openai.Model) []Advertised {
-	available := make(map[string]bool, len(catalog))
-	for _, model := range catalog {
-		if model.Visibility == "" || model.Visibility == "list" {
-			available[model.Name()] = true
-		}
-	}
-	tiers := []Advertised{
+func (r Router) AdvertisedModels() []Advertised {
+	return []Advertised{
 		{ID: HaikuAlias, DisplayName: fmt.Sprintf("Codex Haiku (%s)", r.Haiku), Target: r.Haiku},
 		{ID: SonnetAlias, DisplayName: fmt.Sprintf("Codex Sonnet (%s)", r.Sonnet), Target: r.Sonnet},
 		{ID: OpusAlias, DisplayName: fmt.Sprintf("Codex Opus (%s)", r.Opus), Target: r.Opus},
 	}
-	result := make([]Advertised, 0, len(tiers))
-	for _, tier := range tiers {
-		if available[tier.Target] {
-			result = append(result, tier)
-		}
-	}
-	return result
 }
 
 func (r Router) String() string {

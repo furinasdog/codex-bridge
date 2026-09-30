@@ -8,7 +8,6 @@ type ResponseRequest struct {
 	Input             []InputItem     `json:"input"`
 	Tools             []Tool          `json:"tools,omitempty"`
 	ToolChoice        any             `json:"tool_choice,omitempty"`
-	MaxOutputTokens   int             `json:"max_output_tokens,omitempty"`
 	Temperature       *float64        `json:"temperature,omitempty"`
 	TopP              *float64        `json:"top_p,omitempty"`
 	ParallelToolCalls *bool           `json:"parallel_tool_calls,omitempty"`
@@ -71,18 +70,4 @@ type ResponseError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 	Type    string `json:"type,omitempty"`
-}
-
-type Model struct {
-	ID          string `json:"id,omitempty"`
-	Slug        string `json:"slug,omitempty"`
-	DisplayName string `json:"display_name,omitempty"`
-	Visibility  string `json:"visibility,omitempty"`
-}
-
-func (m Model) Name() string {
-	if m.Slug != "" {
-		return m.Slug
-	}
-	return m.ID
 }

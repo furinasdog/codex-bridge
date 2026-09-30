@@ -12,9 +12,9 @@ The design follows the provider and protocol-adapter separation used by [`@earen
 - Anthropic-compatible `POST /v1/messages` with streaming and non-streaming responses
 - Text, base64/URL image input, function tools, tool calls, and tool results
 - `POST /v1/messages/count_tokens` for client-side context estimates
-- Account-specific model discovery through `GET /v1/models`
+- Stable virtual tier discovery through `GET /v1/models`
 - Native Haiku, Sonnet, and Opus tiers mapped to configurable Codex models
-- Safe, idempotent Claude Code `settings.json` configuration with automatic backups
+- Safe, idempotent Claude Code `settings.json` configuration with automatic backups and `modelPicker` capability mappings
 - OAuth 2.0 authorization code flow with PKCE, state, nonce, and OIDC signature validation
 - Automatic, concurrency-safe access-token refresh and rotating refresh-token persistence
 - Public OpenAI Responses API only; every request uses `store: false` and `stream: true`
@@ -93,6 +93,9 @@ go build -trimpath -o bin/codex-bridge.exe ./cmd/codex-bridge
    Remove-Item Env:ANTHROPIC_API_KEY -ErrorAction SilentlyContinue
    ```
 
+   Re-run this command after upgrading Codex Bridge so newly supported Claude
+   Code configuration fields are merged into an existing setup.
+
 3. Start the bridge in one terminal.
 
    ```bash
@@ -112,7 +115,7 @@ go build -trimpath -o bin/codex-bridge.exe ./cmd/codex-bridge
    claude
    ```
 
-To inspect the active account and the tiers available from its model catalog:
+To inspect the active account and the bridge's configured tiers:
 
 ```bash
 ./bin/codex-bridge status
@@ -154,9 +157,9 @@ Configuration uses environment variables, with flags taking precedence for the l
 
 The bridge recognizes both its virtual names (`codex-haiku`, `codex-sonnet`, and
 `codex-opus`) and Claude model names containing `haiku`, `sonnet`, or `opus`.
-Unknown model IDs pass through unchanged so account-specific models discovered by
-a gateway-capable client remain usable. The inbound name is preserved in the
-Anthropic response while the resolved Codex model is sent upstream.
+Unknown model IDs pass through unchanged so explicitly configured provider models
+remain usable. The inbound name is preserved in the Anthropic response while the
+resolved Codex model is sent upstream.
 
 ## API examples
 

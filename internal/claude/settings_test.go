@@ -15,7 +15,7 @@ func TestConfigureMergesAndBacksUpSettings(t *testing.T) {
 	t.Parallel()
 	directory := t.TempDir()
 	path := filepath.Join(directory, "settings.json")
-	original := []byte("{\n  \"includeCoAuthoredBy\": false,\n  \"effortLevel\": \"medium\",\n  \"env\": {\"KEEP_ME\": \"yes\", \"ANTHROPIC_API_KEY\": \"remove-me\"}\n}\n")
+	original := []byte("{\n  \"includeCoAuthoredBy\": false,\n  \"effortLevel\": \"medium\",\n  \"env\": {\"KEEP_ME\": \"yes\", \"ANTHROPIC_API_KEY\": \"remove-me\", \"CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY\": \"1\"},\n  \"modelPicker\": {\"options\": [{\"model\": \"foreign-model\", \"label\": \"Keep me\"}]}\n}\n")
 	if err := os.WriteFile(path, original, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -59,10 +59,29 @@ func TestConfigureMergesAndBacksUpSettings(t *testing.T) {
 	if _, exists := environment["ANTHROPIC_API_KEY"]; exists {
 		t.Fatal("ANTHROPIC_API_KEY must be removed from file-scoped settings")
 	}
+	if _, exists := environment["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"]; exists {
+		t.Fatal("gateway discovery must be removed when modelPicker is configured")
+	}
 	if environment["ANTHROPIC_DEFAULT_HAIKU_MODEL"] != models.HaikuAlias ||
 		environment["ANTHROPIC_DEFAULT_SONNET_MODEL"] != models.SonnetAlias ||
 		environment["ANTHROPIC_DEFAULT_OPUS_MODEL"] != models.OpusAlias {
 		t.Fatalf("tier aliases were not configured: %#v", environment)
+	}
+	picker := root["modelPicker"].(map[string]any)
+	if picker["replaceBuiltInOptions"] != true {
+		t.Fatalf("modelPicker must replace built-in models: %#v", picker)
+	}
+	rows := picker["options"].([]any)
+	if len(rows) != 4 || rows[0].(map[string]any)["model"] != "foreign-model" {
+		t.Fatalf("foreign modelPicker rows were not preserved: %#v", rows)
+	}
+	wantModels := []string{models.HaikuAlias, models.SonnetAlias, models.OpusAlias}
+	wantBehaviors := []string{"claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-6"}
+	for index := range wantModels {
+		row := rows[index+1].(map[string]any)
+		if row["model"] != wantModels[index] || row["behavesAs"] != wantBehaviors[index] {
+			t.Fatalf("unexpected generated picker row: %#v", row)
+		}
 	}
 
 	second, err := Configure(options)
