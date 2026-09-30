@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file. The format 
 - Configurable Haiku, Sonnet, and Opus choices with real model discovery.
 - Embedded bilingual Vue dashboard with rolling token usage, service metrics, and Codex quota reporting.
 - Persistent 24-hour local telemetry with no prompt or credential storage.
+- Automated multi-platform GitHub Releases with generated notes and SHA-256 checksums.
 
 ### Fixed
 
@@ -25,3 +26,4 @@ All notable changes to this project will be documented in this file. The format 
 
 - Write real configured model IDs into Claude Code settings and forward request model names without server-side translation.
 - Replace JSON request logging with Gin's colored console logger and readable text service logs.
+- Produce the native `.exe` filename from `make` on Windows and avoid unnecessary dashboard rebuilds.

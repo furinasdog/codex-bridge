@@ -63,6 +63,15 @@ npm run --prefix web build
 go build -trimpath -o bin/codex-bridge.exe ./cmd/codex-bridge
 ```
 
+GNU Make selects the native executable name automatically:
+
+```bash
+make
+```
+
+This produces `bin/codex-bridge.exe` on Windows and `bin/codex-bridge` on
+Linux and macOS. The dashboard is rebuilt only when its source files change.
+
 The compiled dashboard is embedded in the Go binary. A source archive or Git
 checkout already includes the generated assets, so Go-only builds also work.
 
@@ -212,6 +221,18 @@ go test -race ./...   # supported when the platform has CGO/race support
 ```
 
 The test suite uses local `httptest` servers and does not require OpenAI credentials.
+
+## Releases
+
+Pushing a semantic version tag such as `v1.0.0` runs the release workflow. It
+builds amd64 and arm64 archives for Linux, macOS, and Windows, publishes a
+`SHA256SUMS` file, and creates a GitHub Release with automatically generated
+release notes.
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
 
 ## Project status
 
