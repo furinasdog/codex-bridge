@@ -57,7 +57,7 @@ func Status(cfg config.Config) error {
 func ConfigureClaude(cfg config.Config, settingsPath, baseURL, authToken string) error {
 	result, err := claude.Configure(claude.ConfigureOptions{
 		Path: settingsPath, BaseURL: baseURL, AuthToken: authToken,
-		Models: models.NewRouter(cfg.HaikuModel, cfg.SonnetModel, cfg.OpusModel),
+		Models: models.NewCatalog(cfg.HaikuModel, cfg.SonnetModel, cfg.OpusModel),
 	})
 	if err != nil {
 		return err
@@ -82,5 +82,5 @@ func configureLogger(level string) {
 	if err := slogLevel.UnmarshalText([]byte(level)); err != nil {
 		slogLevel = slog.LevelInfo
 	}
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slogLevel})))
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slogLevel})))
 }

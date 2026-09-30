@@ -22,7 +22,7 @@ func TestConfigureMergesAndBacksUpSettings(t *testing.T) {
 	now := time.Date(2026, time.September, 30, 6, 7, 8, 9, time.UTC)
 	options := ConfigureOptions{
 		Path: path, BaseURL: "http://127.0.0.1:8787", AuthToken: "bridge-token",
-		Models: models.NewRouter("fast", "balanced", "powerful"),
+		Models: models.NewCatalog("fast", "balanced", "powerful"),
 		Now:    func() time.Time { return now },
 	}
 
@@ -49,7 +49,7 @@ func TestConfigureMergesAndBacksUpSettings(t *testing.T) {
 	if err := json.Unmarshal(configured, &root); err != nil {
 		t.Fatal(err)
 	}
-	if root["includeCoAuthoredBy"] != false || root["effortLevel"] != "medium" || root["model"] != "sonnet" {
+	if root["includeCoAuthoredBy"] != false || root["effortLevel"] != "medium" || root["model"] != "balanced" {
 		t.Fatalf("existing settings were not preserved: %#v", root)
 	}
 	environment := root["env"].(map[string]any)
@@ -62,9 +62,9 @@ func TestConfigureMergesAndBacksUpSettings(t *testing.T) {
 	if _, exists := environment["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"]; exists {
 		t.Fatal("gateway discovery must be removed when modelPicker is configured")
 	}
-	if environment["ANTHROPIC_DEFAULT_HAIKU_MODEL"] != models.HaikuAlias ||
-		environment["ANTHROPIC_DEFAULT_SONNET_MODEL"] != models.SonnetAlias ||
-		environment["ANTHROPIC_DEFAULT_OPUS_MODEL"] != models.OpusAlias {
+	if environment["ANTHROPIC_DEFAULT_HAIKU_MODEL"] != "fast" ||
+		environment["ANTHROPIC_DEFAULT_SONNET_MODEL"] != "balanced" ||
+		environment["ANTHROPIC_DEFAULT_OPUS_MODEL"] != "powerful" {
 		t.Fatalf("tier aliases were not configured: %#v", environment)
 	}
 	picker := root["modelPicker"].(map[string]any)
@@ -75,7 +75,7 @@ func TestConfigureMergesAndBacksUpSettings(t *testing.T) {
 	if len(rows) != 4 || rows[0].(map[string]any)["model"] != "foreign-model" {
 		t.Fatalf("foreign modelPicker rows were not preserved: %#v", rows)
 	}
-	wantModels := []string{models.HaikuAlias, models.SonnetAlias, models.OpusAlias}
+	wantModels := []string{"fast", "balanced", "powerful"}
 	wantBehaviors := []string{"claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-6"}
 	for index := range wantModels {
 		row := rows[index+1].(map[string]any)
@@ -102,7 +102,7 @@ func TestConfigureRejectsInvalidJSONWithoutChangingIt(t *testing.T) {
 	}
 	_, err := Configure(ConfigureOptions{
 		Path: path, BaseURL: "http://127.0.0.1:8787", AuthToken: "token",
-		Models: models.NewRouter("fast", "balanced", "powerful"),
+		Models: models.NewCatalog("fast", "balanced", "powerful"),
 	})
 	if err == nil {
 		t.Fatal("expected invalid JSON error")

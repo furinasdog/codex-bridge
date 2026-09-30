@@ -37,6 +37,25 @@ func TestClientStream(t *testing.T) {
 	}
 }
 
+func TestClientObservesResponseHeaders(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("X-Codex-Plan-Type", "pro")
+		writer.Header().Set("Content-Type", "text/event-stream")
+		_, _ = writer.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"r1\"}}\n\n"))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, staticToken("token"), server.Client(), "test")
+	observed := make(chan string, 1)
+	client.SetResponseObserver(func(header http.Header) { observed <- header.Get("X-Codex-Plan-Type") })
+	if err := client.Stream(context.Background(), ResponseRequest{}, func(StreamEvent) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-observed; got != "pro" {
+		t.Fatalf("observed plan = %q, want pro", got)
+	}
+}
+
 func TestClientRequiresCompletedEvent(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {

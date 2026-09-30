@@ -15,20 +15,23 @@ import (
 	"github.com/codex-bridge/codex-bridge/internal/auth"
 	"github.com/codex-bridge/codex-bridge/internal/models"
 	"github.com/codex-bridge/codex-bridge/internal/openai"
+	"github.com/codex-bridge/codex-bridge/internal/telemetry"
 )
 
 type Handler struct {
 	client           *openai.Client
-	models           models.Router
+	models           models.Catalog
+	telemetry        *telemetry.Store
 	requestBodyLimit int64
 	requestTimeout   time.Duration
 }
 
-func NewHandler(client *openai.Client, modelRouter models.Router, requestBodyLimit int64, requestTimeout time.Duration) *Handler {
-	return &Handler{client: client, models: modelRouter, requestBodyLimit: requestBodyLimit, requestTimeout: requestTimeout}
+func NewHandler(client *openai.Client, catalog models.Catalog, store *telemetry.Store, requestBodyLimit int64, requestTimeout time.Duration) *Handler {
+	return &Handler{client: client, models: catalog, telemetry: store, requestBodyLimit: requestBodyLimit, requestTimeout: requestTimeout}
 }
 
 func (h *Handler) Messages(c *gin.Context) {
+	started := time.Now()
 	var request MessageRequest
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, h.requestBodyLimit)
 	decoder := json.NewDecoder(c.Request.Body)
@@ -45,7 +48,7 @@ func (h *Handler) Messages(c *gin.Context) {
 	if cacheKey == "" {
 		cacheKey = requestID(c)
 	}
-	upstream, err := ConvertRequest(request, h.models.Resolve(request.Model), cacheKey)
+	upstream, err := ConvertRequest(request, request.Model, cacheKey)
 	if err != nil {
 		writeError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
@@ -54,34 +57,39 @@ func (h *Handler) Messages(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), h.requestTimeout)
 	defer cancel()
 	if request.Stream {
-		h.stream(c, ctx, request.Model, upstream)
+		response, streamErr := h.stream(c, ctx, request.Model, upstream)
+		h.record(request.Model, response.Usage, time.Since(started), streamErr == nil)
 		return
 	}
 	adapter := newStreamAdapter(request.Model, nil)
 	if err := h.client.Stream(ctx, upstream, adapter.Handle); err != nil {
+		h.record(request.Model, Usage{}, time.Since(started), false)
 		writeMappedError(c, err)
 		return
 	}
 	response, err := adapter.Result()
 	if err != nil {
+		h.record(request.Model, Usage{}, time.Since(started), false)
 		writeError(c, http.StatusBadGateway, "api_error", err.Error())
 		return
 	}
+	h.record(request.Model, response.Usage, time.Since(started), true)
 	c.JSON(http.StatusOK, response)
 }
 
-func (h *Handler) stream(c *gin.Context, ctx context.Context, model string, upstream openai.ResponseRequest) {
+func (h *Handler) stream(c *gin.Context, ctx context.Context, model string, upstream openai.ResponseRequest) (MessageResponse, error) {
 	sink := &ginEventSink{context: c}
 	adapter := newStreamAdapter(model, sink)
 	err := h.client.Stream(ctx, upstream, adapter.Handle)
 	if err == nil {
-		return
+		return adapter.Result()
 	}
 	if sink.started {
 		_ = sink.Send("error", ErrorResponse{Type: "error", Error: ErrorDetail{Type: errorType(err), Message: err.Error()}})
-		return
+		return MessageResponse{}, err
 	}
 	writeMappedError(c, err)
+	return MessageResponse{}, err
 }
 
 func (h *Handler) Models(c *gin.Context) {
@@ -91,7 +99,7 @@ func (h *Handler) Models(c *gin.Context) {
 		DisplayName string `json:"display_name,omitempty"`
 		CreatedAt   string `json:"created_at,omitempty"`
 	}
-	advertised := h.models.AdvertisedModels()
+	advertised := h.models.Models()
 	data := make([]modelResponse, 0, len(advertised))
 	for _, model := range advertised {
 		data = append(data, modelResponse{ID: model.ID, Type: "model", DisplayName: model.DisplayName})
@@ -102,6 +110,16 @@ func (h *Handler) Models(c *gin.Context) {
 		lastID = data[len(data)-1].ID
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "has_more": false, "first_id": firstID, "last_id": lastID})
+}
+
+func (h *Handler) record(model string, usage Usage, duration time.Duration, success bool) {
+	if h.telemetry == nil {
+		return
+	}
+	h.telemetry.Record(telemetry.Event{
+		Timestamp: time.Now(), Model: model, InputTokens: usage.InputTokens,
+		OutputTokens: usage.OutputTokens, DurationMS: duration.Milliseconds(), Success: success,
+	})
 }
 
 func (h *Handler) CountTokens(c *gin.Context) {

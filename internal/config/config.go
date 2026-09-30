@@ -25,6 +25,7 @@ type Config struct {
 	SonnetModel      string
 	OpusModel        string
 	CredentialPath   string
+	TelemetryPath    string
 	AccessToken      string
 	APIKey           string
 	AllowedOrigins   []string
@@ -49,6 +50,7 @@ func Load() (Config, error) {
 		SonnetModel:      env("CODEX_BRIDGE_SONNET_MODEL", env("CODEX_BRIDGE_MODEL", defaultSonnetModel)),
 		OpusModel:        env("CODEX_BRIDGE_OPUS_MODEL", defaultOpusModel),
 		CredentialPath:   env("CODEX_BRIDGE_CREDENTIALS", filepath.Join(configDir, "codex-bridge", "credentials.json")),
+		TelemetryPath:    env("CODEX_BRIDGE_TELEMETRY", filepath.Join(configDir, "codex-bridge", "metrics.json")),
 		AccessToken:      os.Getenv("CODEX_ACCESS_TOKEN"),
 		APIKey:           os.Getenv("CODEX_BRIDGE_API_KEY"),
 		AllowedOrigins:   splitCSV(os.Getenv("CODEX_BRIDGE_ALLOWED_ORIGINS")),

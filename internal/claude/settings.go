@@ -18,7 +18,7 @@ type ConfigureOptions struct {
 	Path      string
 	BaseURL   string
 	AuthToken string
-	Models    models.Router
+	Models    models.Catalog
 	Now       func() time.Time
 }
 
@@ -63,8 +63,12 @@ func Configure(options ConfigureOptions) (ConfigureResult, error) {
 	if _, exists := root["$schema"]; !exists {
 		root["$schema"] = settingsSchema
 	}
-	if _, exists := root["model"]; !exists {
-		root["model"] = "sonnet"
+	if current, exists := root["model"].(string); !exists || current == "sonnet" || current == "codex-sonnet" {
+		root["model"] = options.Models.Sonnet
+	} else if current == "codex-haiku" {
+		root["model"] = options.Models.Haiku
+	} else if current == "codex-opus" {
+		root["model"] = options.Models.Opus
 	}
 
 	environment := make(map[string]any)
@@ -78,13 +82,13 @@ func Configure(options ConfigureOptions) (ConfigureResult, error) {
 	values := map[string]string{
 		"ANTHROPIC_BASE_URL":                             options.BaseURL,
 		"ANTHROPIC_AUTH_TOKEN":                           options.AuthToken,
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL":                  models.HaikuAlias,
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":                  options.Models.Haiku,
 		"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":             "Codex Haiku",
 		"ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION":      "Fast Codex tier backed by " + options.Models.Haiku,
-		"ANTHROPIC_DEFAULT_SONNET_MODEL":                 models.SonnetAlias,
+		"ANTHROPIC_DEFAULT_SONNET_MODEL":                 options.Models.Sonnet,
 		"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":            "Codex Sonnet",
 		"ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION":     "Balanced Codex tier backed by " + options.Models.Sonnet,
-		"ANTHROPIC_DEFAULT_OPUS_MODEL":                   models.OpusAlias,
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":                   options.Models.Opus,
 		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":              "Codex Opus",
 		"ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION":       "Powerful Codex tier backed by " + options.Models.Opus,
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":       "1",
@@ -100,7 +104,7 @@ func Configure(options ConfigureOptions) (ConfigureResult, error) {
 	// can produce a second bare row without behavesAs on some Claude versions.
 	delete(environment, "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY")
 	root["env"] = environment
-	if err := mergeModelPicker(root); err != nil {
+	if err := mergeModelPicker(root, options.Models); err != nil {
 		return ConfigureResult{}, err
 	}
 
@@ -129,7 +133,7 @@ func Configure(options ConfigureOptions) (ConfigureResult, error) {
 	return result, nil
 }
 
-func mergeModelPicker(root map[string]any) error {
+func mergeModelPicker(root map[string]any, catalog models.Catalog) error {
 	picker := make(map[string]any)
 	if existing, exists := root["modelPicker"]; exists {
 		object, ok := existing.(map[string]any)
@@ -150,15 +154,16 @@ func mergeModelPicker(root map[string]any) error {
 				return fmt.Errorf("Claude settings modelPicker.options entries must be JSON objects")
 			}
 			model, _ := object["model"].(string)
-			if model != models.HaikuAlias && model != models.SonnetAlias && model != models.OpusAlias {
+			if model != "codex-haiku" && model != "codex-sonnet" && model != "codex-opus" &&
+				model != catalog.Haiku && model != catalog.Sonnet && model != catalog.Opus {
 				options = append(options, row)
 			}
 		}
 	}
 	options = append(options,
-		map[string]any{"model": models.HaikuAlias, "label": "Codex Haiku", "description": "Fast Codex tier", "behavesAs": "claude-haiku-4-5"},
-		map[string]any{"model": models.SonnetAlias, "label": "Codex Sonnet", "description": "Balanced Codex tier", "behavesAs": "claude-sonnet-4-5"},
-		map[string]any{"model": models.OpusAlias, "label": "Codex Opus", "description": "Powerful Codex tier", "behavesAs": "claude-opus-4-6"},
+		map[string]any{"model": catalog.Haiku, "label": "Codex Haiku", "description": "Fast Codex tier", "behavesAs": "claude-haiku-4-5"},
+		map[string]any{"model": catalog.Sonnet, "label": "Codex Sonnet", "description": "Balanced Codex tier", "behavesAs": "claude-sonnet-4-5"},
+		map[string]any{"model": catalog.Opus, "label": "Codex Opus", "description": "Powerful Codex tier", "behavesAs": "claude-opus-4-6"},
 	)
 	picker["options"] = options
 	if _, exists := picker["replaceBuiltInOptions"]; !exists {

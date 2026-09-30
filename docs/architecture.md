@@ -5,11 +5,12 @@
 Codex Bridge is designed around six boundaries:
 
 1. The Gin server owns HTTP concerns, authentication, CORS, limits, request IDs, and shutdown.
-2. The model router maps Claude's Haiku, Sonnet, and Opus tiers to independently configured Codex models.
+2. The model catalog describes independently configured Haiku, Sonnet, and Opus choices using their real upstream IDs.
 3. The Anthropic adapter validates Messages API input and converts it to provider-neutral OpenAI Responses structures.
 4. The OpenAI client owns bearer authentication, Responses API requests, model discovery, and strict SSE completion handling.
 5. The authentication package owns OAuth, OIDC verification, credential storage, and refresh serialization.
-6. The Claude configurator safely merges gateway settings into the user's existing Claude Code configuration.
+6. The Claude configurator safely merges real model IDs and gateway settings into the user's existing Claude Code configuration.
+7. The telemetry store retains a rolling 24-hour local usage history and publishes it to the embedded Vue dashboard.
 
 This is similar to the provider separation in `pi-ai`: protocol code does not know how credentials are acquired, and credential code does not know how Messages requests are represented.
 
@@ -19,17 +20,31 @@ This is similar to the provider separation in `pi-ai`: protocol code does not kn
 POST /v1/messages
   -> request size and optional API-key checks
   -> Anthropic JSON validation
-  -> tier-to-model resolution
+  -> unchanged request model forwarding
   -> system/messages/tools conversion
   -> access token lookup or serialized refresh
   -> POST https://api.openai.com/v1/responses
        store=false
        stream=true
   -> strict SSE event consumption
+  -> local token and quota telemetry update
   -> Anthropic SSE output or aggregated JSON output
 ```
 
 A turn is successful only after `response.completed`. A failed, incomplete, timed-out, or truncated stream is never presented as a successful response.
+
+## Dashboard and telemetry
+
+The Vue single-page application is compiled into static assets and embedded in
+the Go binary. `GET /api/dashboard` accepts only loopback clients. Successful and
+failed upstream turns are aggregated into fixed buckets for the last 1, 5, 12,
+and 24 hours. The store persists only the rolling 24-hour window in the user's
+configuration directory.
+
+Codex plan, credit, and rate-window values are captured from response headers
+when OpenAI provides them. Missing values remain unknown; the bridge does not
+estimate subscription balance. OAuth tokens and request content never enter the
+telemetry store or dashboard response.
 
 ## Authentication lifecycle
 

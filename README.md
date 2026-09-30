@@ -12,14 +12,15 @@ The design follows the provider and protocol-adapter separation used by [`@earen
 - Anthropic-compatible `POST /v1/messages` with streaming and non-streaming responses
 - Text, base64/URL image input, function tools, tool calls, and tool results
 - `POST /v1/messages/count_tokens` for client-side context estimates
-- Stable virtual tier discovery through `GET /v1/models`
-- Native Haiku, Sonnet, and Opus tiers mapped to configurable Codex models
+- Configured Codex model discovery through `GET /v1/models`
+- Native Haiku, Sonnet, and Opus choices that use real upstream model IDs end to end
 - Safe, idempotent Claude Code `settings.json` configuration with automatic backups and `modelPicker` capability mappings
+- Embedded Vue dashboard with English and Chinese UI, 1/5/12/24-hour usage charts, service health, and Codex quota metadata
 - OAuth 2.0 authorization code flow with PKCE, state, nonce, and OIDC signature validation
 - Automatic, concurrency-safe access-token refresh and rotating refresh-token persistence
 - Public OpenAI Responses API only; every request uses `store: false` and `stream: true`
 - Localhost-only default, optional bridge API key, explicit CORS allowlist, body limits, and graceful shutdown
-- Structured logs with request IDs and no credential logging
+- Colored Gin request logs, readable service logs, request IDs, and no credential logging
 
 ## Architecture
 
@@ -42,20 +43,28 @@ See [Architecture](docs/architecture.md) and [Protocol compatibility](docs/proto
 ## Requirements
 
 - Go 1.23 or newer
+- Node.js 22 or newer and npm (only when rebuilding the dashboard)
 - An eligible ChatGPT account that can grant ChatGPT plan usage
 - A model available to that account
 
 ## Build
 
 ```bash
+npm ci --prefix web
+npm run --prefix web build
 go build -trimpath -o bin/codex-bridge ./cmd/codex-bridge
 ```
 
 On Windows:
 
 ```powershell
+npm ci --prefix web
+npm run --prefix web build
 go build -trimpath -o bin/codex-bridge.exe ./cmd/codex-bridge
 ```
+
+The compiled dashboard is embedded in the Go binary. A source archive or Git
+checkout already includes the generated assets, so Go-only builds also work.
 
 ## Quick start
 
@@ -108,6 +117,9 @@ go build -trimpath -o bin/codex-bridge.exe ./cmd/codex-bridge
    .\bin\codex-bridge.exe serve
    ```
 
+   Open `http://127.0.0.1:8787/` for the local dashboard. Its metrics endpoint
+   is restricted to loopback clients and never exposes OAuth credentials.
+
 4. Start or restart Claude Code, then use `/model` to choose **Codex Haiku**,
    **Codex Sonnet**, or **Codex Opus**.
 
@@ -148,18 +160,18 @@ Configuration uses environment variables, with flags taking precedence for the l
 | `CODEX_BRIDGE_MODEL` | empty | Legacy fallback for the Sonnet tier; `--model` maps all three tiers for backward compatibility |
 | `CODEX_BRIDGE_API_KEY` | empty | Protects `/v1/*`; required for non-loopback binding |
 | `CODEX_BRIDGE_CREDENTIALS` | OS user config directory | Credential JSON path |
+| `CODEX_BRIDGE_TELEMETRY` | OS user config directory | Rolling 24-hour dashboard metrics path |
 | `CODEX_ACCESS_TOKEN` | empty | Non-persistent token override for automation |
 | `CODEX_BRIDGE_ALLOWED_ORIGINS` | empty | Comma-separated browser origins allowed by CORS |
 | `CODEX_BRIDGE_UPSTREAM_URL` | `https://api.openai.com/v1` | Responses API base URL, mainly for testing |
 | `CODEX_BRIDGE_MAX_BODY_BYTES` | `33554432` | Maximum request body size |
 | `CODEX_BRIDGE_REQUEST_TIMEOUT` | `10m` | Per-inference deadline |
-| `CODEX_BRIDGE_LOG_LEVEL` | `info` | Structured log level |
+| `CODEX_BRIDGE_LOG_LEVEL` | `info` | Service log level |
 
-The bridge recognizes both its virtual names (`codex-haiku`, `codex-sonnet`, and
-`codex-opus`) and Claude model names containing `haiku`, `sonnet`, or `opus`.
-Unknown model IDs pass through unchanged so explicitly configured provider models
-remain usable. The inbound name is preserved in the Anthropic response while the
-resolved Codex model is sent upstream.
+`configure-claude` writes the real configured IDs into Claude Code's default
+Haiku, Sonnet, and Opus settings. The server forwards every inbound `model` value
+unchanged to OpenAI and returns the same value in the Anthropic response. There
+is no server-side alias or tier translation.
 
 ## API examples
 
@@ -170,7 +182,7 @@ curl http://127.0.0.1:8787/v1/messages \
   -H 'content-type: application/json' \
   -H 'x-api-key: local-placeholder' \
   -d '{
-    "model": "codex-sonnet",
+    "model": "gpt-6.1-sol",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "Explain this repository."}]
   }'
@@ -191,6 +203,9 @@ Read [SECURITY.md](SECURITY.md) before exposing the service beyond localhost.
 ## Development
 
 ```bash
+npm ci --prefix web
+npm run --prefix web typecheck
+npm run --prefix web build
 go test ./...
 go vet ./...
 go test -race ./...   # supported when the platform has CGO/race support

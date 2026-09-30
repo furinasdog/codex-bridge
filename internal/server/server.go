@@ -17,8 +17,10 @@ import (
 
 	"github.com/codex-bridge/codex-bridge/internal/anthropic"
 	"github.com/codex-bridge/codex-bridge/internal/config"
+	"github.com/codex-bridge/codex-bridge/internal/dashboard"
 	"github.com/codex-bridge/codex-bridge/internal/models"
 	"github.com/codex-bridge/codex-bridge/internal/openai"
+	"github.com/codex-bridge/codex-bridge/internal/telemetry"
 )
 
 type Server struct {
@@ -28,9 +30,11 @@ type Server struct {
 
 func New(cfg config.Config, tokens openai.TokenProvider, version string) *Server {
 	client := openai.NewClient(cfg.UpstreamURL, tokens, nil, cfg.ForwardUserAgent+"/"+version)
-	modelRouter := models.NewRouter(cfg.HaikuModel, cfg.SonnetModel, cfg.OpusModel)
-	handler := anthropic.NewHandler(client, modelRouter, cfg.RequestBodyLimit, cfg.RequestTimeout)
-	router := NewRouter(cfg, handler)
+	store := telemetry.New(cfg.TelemetryPath)
+	client.SetResponseObserver(store.UpdateQuota)
+	catalog := models.NewCatalog(cfg.HaikuModel, cfg.SonnetModel, cfg.OpusModel)
+	handler := anthropic.NewHandler(client, catalog, store, cfg.RequestBodyLimit, cfg.RequestTimeout)
+	router := NewRouter(cfg, handler, store, catalog)
 	return &Server{
 		cfg: cfg,
 		server: &http.Server{
@@ -42,11 +46,13 @@ func New(cfg config.Config, tokens openai.TokenProvider, version string) *Server
 	}
 }
 
-func NewRouter(cfg config.Config, handler *anthropic.Handler) *gin.Engine {
+func NewRouter(cfg config.Config, handler *anthropic.Handler, store *telemetry.Store, catalog models.Catalog) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
+	gin.ForceConsoleColor()
 	router := gin.New()
 	_ = router.SetTrustedProxies(nil)
-	router.Use(gin.Recovery(), securityHeaders(), requestLogger(), cors(cfg.AllowedOrigins))
+	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/api/dashboard"}}), gin.Recovery(), securityHeaders(), requestID(), cors(cfg.AllowedOrigins))
+	dashboard.Register(router)
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
@@ -58,6 +64,7 @@ func NewRouter(cfg config.Config, handler *anthropic.Handler) *gin.Engine {
 	router.HEAD("/api/hello", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
+	router.GET("/api/dashboard", localDashboard(store, catalog))
 	v1 := router.Group("/v1")
 	v1.Use(apiKey(cfg.APIKey))
 	v1.POST("/messages", handler.Messages)
@@ -99,7 +106,7 @@ func securityHeaders() gin.HandlerFunc {
 	}
 }
 
-func requestLogger() gin.HandlerFunc {
+func requestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID := c.GetHeader("X-Request-ID")
 		if requestID == "" || len(requestID) > 128 {
@@ -109,9 +116,18 @@ func requestLogger() gin.HandlerFunc {
 		}
 		c.Set("request_id", requestID)
 		c.Header("X-Request-ID", requestID)
-		started := time.Now()
 		c.Next()
-		slog.Info("request completed", "request_id", requestID, "method", c.Request.Method, "path", c.Request.URL.Path, "status", c.Writer.Status(), "duration_ms", time.Since(started).Milliseconds())
+	}
+}
+
+func localDashboard(store *telemetry.Store, catalog models.Catalog) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ip := net.ParseIP(c.ClientIP())
+		if ip == nil || !ip.IsLoopback() {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "dashboard metrics are available only from localhost"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"service": store.Snapshot(time.Now()), "models": catalog.Models()})
 	}
 }
 

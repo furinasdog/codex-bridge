@@ -14,6 +14,7 @@ import (
 	"github.com/codex-bridge/codex-bridge/internal/config"
 	"github.com/codex-bridge/codex-bridge/internal/models"
 	"github.com/codex-bridge/codex-bridge/internal/openai"
+	"github.com/codex-bridge/codex-bridge/internal/telemetry"
 )
 
 type testToken struct{}
@@ -50,9 +51,11 @@ func TestMessagesEndToEnd(t *testing.T) {
 
 	cfg := config.Config{APIKey: "bridge-secret", AllowedOrigins: []string{"https://example.test"}}
 	client := openai.NewClient(upstream.URL, testToken{}, upstream.Client(), "test")
-	handler := anthropic.NewHandler(client, models.NewRouter("gpt-fast", "gpt-test", "gpt-power"), 1<<20, time.Minute)
-	router := NewRouter(cfg, handler)
-	body := []byte(`{"model":"claude-sonnet-4-5","max_tokens":128,"messages":[{"role":"user","content":"hi"}]}`)
+	catalog := models.NewCatalog("gpt-fast", "gpt-test", "gpt-power")
+	store := telemetry.New("")
+	handler := anthropic.NewHandler(client, catalog, store, 1<<20, time.Minute)
+	router := NewRouter(cfg, handler, store, catalog)
+	body := []byte(`{"model":"gpt-test","max_tokens":128,"messages":[{"role":"user","content":"hi"}]}`)
 
 	unauthorized := httptest.NewRecorder()
 	router.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body)))
@@ -76,7 +79,7 @@ func TestMessagesEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.ID != "msg_resp_1" || response.Model != "claude-sonnet-4-5" || response.Content[0].Text != "hello" {
+	if response.ID != "msg_resp_1" || response.Model != "gpt-test" || response.Content[0].Text != "hello" {
 		t.Fatalf("unexpected response: %#v", response)
 	}
 }
@@ -85,8 +88,10 @@ func TestClaudeHelloProbe(t *testing.T) {
 	t.Parallel()
 	cfg := config.Config{}
 	client := openai.NewClient("http://127.0.0.1", testToken{}, nil, "test")
-	handler := anthropic.NewHandler(client, models.NewRouter("fast", "balanced", "powerful"), 1<<20, time.Minute)
-	router := NewRouter(cfg, handler)
+	catalog := models.NewCatalog("fast", "balanced", "powerful")
+	store := telemetry.New("")
+	handler := anthropic.NewHandler(client, catalog, store, 1<<20, time.Minute)
+	router := NewRouter(cfg, handler, store, catalog)
 
 	for _, method := range []string{http.MethodGet, http.MethodHead} {
 		recorder := httptest.NewRecorder()
@@ -97,12 +102,14 @@ func TestClaudeHelloProbe(t *testing.T) {
 	}
 }
 
-func TestModelsAdvertisesAllVirtualTiers(t *testing.T) {
+func TestModelsAdvertisesConfiguredModels(t *testing.T) {
 	t.Parallel()
 	cfg := config.Config{}
 	client := openai.NewClient("http://127.0.0.1", testToken{}, nil, "test")
-	handler := anthropic.NewHandler(client, models.NewRouter("fast", "balanced", "powerful"), 1<<20, time.Minute)
-	router := NewRouter(cfg, handler)
+	catalog := models.NewCatalog("fast", "balanced", "powerful")
+	store := telemetry.New("")
+	handler := anthropic.NewHandler(client, catalog, store, 1<<20, time.Minute)
+	router := NewRouter(cfg, handler, store, catalog)
 
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
@@ -117,7 +124,7 @@ func TestModelsAdvertisesAllVirtualTiers(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{models.HaikuAlias, models.SonnetAlias, models.OpusAlias}
+	want := []string{"fast", "balanced", "powerful"}
 	if len(response.Data) != len(want) {
 		t.Fatalf("models = %#v, want %v", response.Data, want)
 	}
@@ -125,6 +132,40 @@ func TestModelsAdvertisesAllVirtualTiers(t *testing.T) {
 		if response.Data[index].ID != id {
 			t.Fatalf("models[%d] = %q, want %q", index, response.Data[index].ID, id)
 		}
+	}
+}
+
+func TestDashboardIsEmbeddedAndLocalOnly(t *testing.T) {
+	t.Parallel()
+	cfg := config.Config{}
+	client := openai.NewClient("http://127.0.0.1", testToken{}, nil, "test")
+	catalog := models.NewCatalog("fast", "balanced", "powerful")
+	store := telemetry.New("")
+	handler := anthropic.NewHandler(client, catalog, store, 1<<20, time.Minute)
+	router := NewRouter(cfg, handler, store, catalog)
+
+	page := httptest.NewRecorder()
+	pageRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	pageRequest.RemoteAddr = "127.0.0.1:1234"
+	router.ServeHTTP(page, pageRequest)
+	if page.Code != http.StatusOK || !bytes.Contains(page.Body.Bytes(), []byte("Codex Bridge")) {
+		t.Fatalf("dashboard page status = %d, body = %q", page.Code, page.Body.String())
+	}
+
+	metrics := httptest.NewRecorder()
+	metricsRequest := httptest.NewRequest(http.MethodGet, "/api/dashboard", nil)
+	metricsRequest.RemoteAddr = "127.0.0.1:1234"
+	router.ServeHTTP(metrics, metricsRequest)
+	if metrics.Code != http.StatusOK || !bytes.Contains(metrics.Body.Bytes(), []byte(`"id":"balanced"`)) {
+		t.Fatalf("dashboard API status = %d, body = %q", metrics.Code, metrics.Body.String())
+	}
+
+	forbidden := httptest.NewRecorder()
+	forbiddenRequest := httptest.NewRequest(http.MethodGet, "/api/dashboard", nil)
+	forbiddenRequest.RemoteAddr = "192.0.2.10:1234"
+	router.ServeHTTP(forbidden, forbiddenRequest)
+	if forbidden.Code != http.StatusForbidden {
+		t.Fatalf("non-loopback dashboard status = %d, want 403", forbidden.Code)
 	}
 }
 

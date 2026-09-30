@@ -24,31 +24,30 @@ Codex Bridge implements the subset of the Anthropic Messages API commonly used b
 | Citations | Not supported | No cross-provider lossless mapping |
 | Extended thinking blocks | Not exposed | Reasoning remains provider-managed |
 
-## Model mapping
+## Model selection
 
-The bridge exposes three stable virtual tiers and resolves native Claude aliases to them:
+Claude Code receives three labeled choices backed by real upstream model IDs:
 
-| Requested tier | Virtual model | Default upstream model |
-| --- | --- | --- |
-| Haiku | `codex-haiku` | `gpt-6-luna` |
-| Sonnet | `codex-sonnet` | `gpt-6.1-sol` |
-| Opus | `codex-opus` | `gpt-6-astra` |
+| Claude choice | Default model ID |
+| --- | --- |
+| Codex Haiku | `gpt-6-luna` |
+| Codex Sonnet | `gpt-6.1-sol` |
+| Codex Opus | `gpt-6-astra` |
 
 The defaults can be changed independently with `CODEX_BRIDGE_HAIKU_MODEL`,
-`CODEX_BRIDGE_SONNET_MODEL`, and `CODEX_BRIDGE_OPUS_MODEL`. Unknown model IDs
-pass through unchanged to support explicitly configured provider models. The
-inbound `model` value is preserved in Anthropic responses for client consistency.
-`GET /v1/models` always advertises the three configured virtual tiers; the Codex
-inference endpoint remains authoritative for account access because its
-model-list response can omit models that are callable.
+`CODEX_BRIDGE_SONNET_MODEL`, and `CODEX_BRIDGE_OPUS_MODEL`. The bridge performs
+no model-name conversion: every inbound ID passes upstream unchanged and is
+preserved in the Anthropic response. `GET /v1/models` advertises the configured
+real IDs. The Codex inference endpoint remains authoritative for account access.
 
 ## Claude Code setup
 
 `codex-bridge configure-claude` merges the base URL, Bearer authentication token,
-three tier aliases, display names, and a `modelPicker` lineup into Claude Code's
-user-level `settings.json`. Each generated row carries a `behavesAs` mapping so
+three real default model IDs, display names, and a `modelPicker` lineup into
+Claude Code's user-level `settings.json`. Each generated row carries a `behavesAs` mapping so
 Claude Code applies a known capability profile without warning about an unknown
-model. Existing picker rows and unrelated keys are preserved, an existing file
+model. Legacy `codex-haiku`, `codex-sonnet`, and `codex-opus` entries are migrated
+when configuration is next run. Existing picker rows and unrelated keys are preserved, an existing file
 is backed up before modification, and an invalid JSON file is left untouched.
 The command uses `CLAUDE_CONFIG_DIR` when set and otherwise uses
 `~/.claude/settings.json`.

@@ -1,6 +1,9 @@
 # Build output
 /bin/
 /dist/
+/web/node_modules/
+/web/.vite/
+*.tsbuildinfo
 /.cache/
 *.exe
 *.test

@@ -21,6 +21,11 @@ type Client struct {
 	tokens    TokenProvider
 	http      *http.Client
 	userAgent string
+	observer  func(http.Header)
+}
+
+func (c *Client) SetResponseObserver(observer func(http.Header)) {
+	c.observer = observer
 }
 
 type APIError struct {
@@ -66,6 +71,9 @@ func (c *Client) Stream(ctx context.Context, input ResponseRequest, handle func(
 		return fmt.Errorf("call OpenAI Responses API: %w", err)
 	}
 	defer response.Body.Close()
+	if c.observer != nil {
+		c.observer(response.Header.Clone())
+	}
 	if response.StatusCode != http.StatusOK {
 		return decodeAPIError(response)
 	}
