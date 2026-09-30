@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,6 +28,8 @@ type Server struct {
 	cfg    config.Config
 	server *http.Server
 }
+
+var configureGinOnce sync.Once
 
 func New(cfg config.Config, tokens openai.TokenProvider, version string) *Server {
 	client := openai.NewClient(cfg.UpstreamURL, tokens, nil, cfg.ForwardUserAgent+"/"+version)
@@ -47,8 +50,10 @@ func New(cfg config.Config, tokens openai.TokenProvider, version string) *Server
 }
 
 func NewRouter(cfg config.Config, handler *anthropic.Handler, store *telemetry.Store, catalog models.Catalog) *gin.Engine {
-	gin.SetMode(gin.ReleaseMode)
-	gin.ForceConsoleColor()
+	configureGinOnce.Do(func() {
+		gin.SetMode(gin.ReleaseMode)
+		gin.ForceConsoleColor()
+	})
 	router := gin.New()
 	_ = router.SetTrustedProxies(nil)
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/api/dashboard"}}), gin.Recovery(), securityHeaders(), requestID(), cors(cfg.AllowedOrigins))
