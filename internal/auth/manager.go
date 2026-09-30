@@ -98,9 +98,15 @@ func refresh(ctx context.Context, client HTTPDoer, credential Credential) (Crede
 	if token.IDToken != "" {
 		credential.IDToken = token.IDToken
 	}
-	credential.TokenType = token.TokenType
-	credential.ExpiresIn = token.ExpiresIn
-	credential.Scopes = strings.Fields(token.Scope)
+	if token.TokenType != "" {
+		credential.TokenType = token.TokenType
+	}
+	if token.ExpiresIn > 0 {
+		credential.ExpiresIn = token.ExpiresIn
+	}
+	if token.Scope != "" {
+		credential.Scopes = strings.Fields(token.Scope)
+	}
 	credential.SavedAt = time.Now().UTC()
 	return credential, nil
 }

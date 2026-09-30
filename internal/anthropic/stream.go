@@ -44,10 +44,7 @@ func (a *streamAdapter) Handle(event openai.StreamEvent) error {
 	switch event.Type {
 	case "response.created", "response.in_progress":
 		if event.Response != nil {
-			a.response.ID = event.Response.ID
-			if event.Response.Model != "" {
-				a.response.Model = event.Response.Model
-			}
+			a.response.ID = anthropicMessageID(event.Response.ID)
 		}
 		return a.start()
 	case "response.output_text.delta":
@@ -104,8 +101,11 @@ func (a *streamAdapter) start() error {
 		a.response.ID = "msg_pending"
 	}
 	return a.emit("message_start", map[string]any{
-		"type":    "message_start",
-		"message": MessageResponse{ID: a.response.ID, Type: "message", Role: "assistant", Model: a.response.Model, Content: []ResponseBlock{}, StopReason: "", Usage: Usage{}},
+		"type": "message_start",
+		"message": map[string]any{
+			"id": a.response.ID, "type": "message", "role": "assistant", "model": a.response.Model,
+			"content": []ResponseBlock{}, "stop_reason": nil, "stop_sequence": nil, "usage": Usage{},
+		},
 	})
 }
 
@@ -130,7 +130,9 @@ func (a *streamAdapter) stopText() error {
 		return nil
 	}
 	a.textOpen = false
-	return a.emit("content_block_stop", map[string]any{"type": "content_block_stop", "index": a.textIndex})
+	index := a.textIndex
+	a.textIndex = -1
+	return a.emit("content_block_stop", map[string]any{"type": "content_block_stop", "index": index})
 }
 
 func (a *streamAdapter) startTool(item openai.OutputItem) error {
@@ -202,10 +204,7 @@ func (a *streamAdapter) finish(response *openai.Response) error {
 		}
 	}
 	if response != nil {
-		a.response.ID = response.ID
-		if response.Model != "" {
-			a.response.Model = response.Model
-		}
+		a.response.ID = anthropicMessageID(response.ID)
 		a.response.Usage = Usage{InputTokens: response.Usage.InputTokens, OutputTokens: response.Usage.OutputTokens}
 	}
 	if a.hadToolUse {
@@ -224,6 +223,16 @@ func (a *streamAdapter) finish(response *openai.Response) error {
 	}
 	a.completed = true
 	return nil
+}
+
+func anthropicMessageID(id string) string {
+	if id == "" {
+		return "msg_unknown"
+	}
+	if len(id) >= 4 && id[:4] == "msg_" {
+		return id
+	}
+	return "msg_" + id
 }
 
 func (a *streamAdapter) emit(event string, data any) error {
