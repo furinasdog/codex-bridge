@@ -24,7 +24,28 @@ Codex Bridge implements the subset of the Anthropic Messages API commonly used b
 
 ## Model mapping
 
-The inbound `model` value is preserved in Anthropic responses for client consistency. The configured `CODEX_BRIDGE_MODEL` is sent upstream. `GET /v1/models` returns the selected ChatGPT account's current model catalog so operators can choose a valid upstream value.
+The bridge exposes three stable virtual tiers and resolves native Claude aliases to them:
+
+| Requested tier | Virtual model | Default upstream model |
+| --- | --- | --- |
+| Haiku | `codex-haiku` | `gpt-6-luna` |
+| Sonnet | `codex-sonnet` | `gpt-6.1-sol` |
+| Opus | `codex-opus` | `gpt-6-astra` |
+
+The defaults can be changed independently with `CODEX_BRIDGE_HAIKU_MODEL`,
+`CODEX_BRIDGE_SONNET_MODEL`, and `CODEX_BRIDGE_OPUS_MODEL`. Unknown model IDs
+pass through unchanged to support models discovered for a particular account.
+The inbound `model` value is preserved in Anthropic responses for client
+consistency. `GET /v1/models` advertises only virtual tiers whose configured
+target is visible in the signed-in account's current model catalog.
+
+## Claude Code setup
+
+`codex-bridge configure-claude` merges the base URL, Bearer authentication token,
+three tier aliases, display names, and model-discovery controls into Claude Code's
+user-level `settings.json`. Existing keys are preserved, an existing file is
+backed up before modification, and an invalid JSON file is left untouched. The
+command uses `CLAUDE_CONFIG_DIR` when set and otherwise uses `~/.claude/settings.json`.
 
 ## Errors
 

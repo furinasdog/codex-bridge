@@ -7,7 +7,9 @@ import (
 	"os"
 
 	"github.com/codex-bridge/codex-bridge/internal/auth"
+	"github.com/codex-bridge/codex-bridge/internal/claude"
 	"github.com/codex-bridge/codex-bridge/internal/config"
+	"github.com/codex-bridge/codex-bridge/internal/models"
 	"github.com/codex-bridge/codex-bridge/internal/server"
 )
 
@@ -49,6 +51,29 @@ func Status(cfg config.Config) error {
 		return err
 	}
 	fmt.Printf("Authentication: saved ChatGPT connection\nAccount: %s\nExpires: %s\n", credential.Email, credential.ExpiresAt().Format("2006-01-02 15:04:05Z07:00"))
+	return nil
+}
+
+func ConfigureClaude(cfg config.Config, settingsPath, baseURL, authToken string) error {
+	result, err := claude.Configure(claude.ConfigureOptions{
+		Path: settingsPath, BaseURL: baseURL, AuthToken: authToken,
+		Models: models.NewRouter(cfg.HaikuModel, cfg.SonnetModel, cfg.OpusModel),
+	})
+	if err != nil {
+		return err
+	}
+	if !result.Changed {
+		fmt.Printf("Claude Code settings are already configured at %s.\n", result.Path)
+		return nil
+	}
+	fmt.Printf("Claude Code settings updated at %s.\n", result.Path)
+	if result.BackupPath != "" {
+		fmt.Printf("Previous settings backed up to %s.\n", result.BackupPath)
+	}
+	if os.Getenv("ANTHROPIC_API_KEY") != "" {
+		fmt.Println("Warning: ANTHROPIC_API_KEY is set in the current shell. Unset it before starting Claude Code so ANTHROPIC_AUTH_TOKEN can select the bridge.")
+	}
+	fmt.Println("Restart Claude Code, then use /model to choose Codex Haiku, Codex Sonnet, or Codex Opus.")
 	return nil
 }
 

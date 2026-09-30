@@ -2,12 +2,14 @@
 
 ## Design goals
 
-Codex Bridge is designed around four boundaries:
+Codex Bridge is designed around six boundaries:
 
 1. The Gin server owns HTTP concerns, authentication, CORS, limits, request IDs, and shutdown.
-2. The Anthropic adapter validates Messages API input and converts it to provider-neutral OpenAI Responses structures.
-3. The OpenAI client owns bearer authentication, Responses API requests, model discovery, and strict SSE completion handling.
-4. The authentication package owns OAuth, OIDC verification, credential storage, and refresh serialization.
+2. The model router maps Claude's Haiku, Sonnet, and Opus tiers to independently configured Codex models.
+3. The Anthropic adapter validates Messages API input and converts it to provider-neutral OpenAI Responses structures.
+4. The OpenAI client owns bearer authentication, Responses API requests, model discovery, and strict SSE completion handling.
+5. The authentication package owns OAuth, OIDC verification, credential storage, and refresh serialization.
+6. The Claude configurator safely merges gateway settings into the user's existing Claude Code configuration.
 
 This is similar to the provider separation in `pi-ai`: protocol code does not know how credentials are acquired, and credential code does not know how Messages requests are represented.
 
@@ -17,6 +19,7 @@ This is similar to the provider separation in `pi-ai`: protocol code does not kn
 POST /v1/messages
   -> request size and optional API-key checks
   -> Anthropic JSON validation
+  -> tier-to-model resolution
   -> system/messages/tools conversion
   -> access token lookup or serialized refresh
   -> POST https://api.openai.com/v1/responses

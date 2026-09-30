@@ -10,3 +10,5 @@ All notable changes to this project will be documented in this file. The format 
 - OpenAI Responses API provider using ChatGPT plan OAuth authorization.
 - PKCE login, OIDC validation, credential refresh, logout, and model discovery.
 - Local security controls, structured logging, tests, and project documentation.
+- Safe automatic Claude Code settings configuration with backups and atomic writes.
+- Configurable Haiku, Sonnet, and Opus tiers with account-aware model discovery.

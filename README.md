@@ -13,6 +13,8 @@ The design follows the provider and protocol-adapter separation used by [`@earen
 - Text, base64/URL image input, function tools, tool calls, and tool results
 - `POST /v1/messages/count_tokens` for client-side context estimates
 - Account-specific model discovery through `GET /v1/models`
+- Native Haiku, Sonnet, and Opus tiers mapped to configurable Codex models
+- Safe, idempotent Claude Code `settings.json` configuration with automatic backups
 - OAuth 2.0 authorization code flow with PKCE, state, nonce, and OIDC signature validation
 - Automatic, concurrency-safe access-token refresh and rotating refresh-token persistence
 - Public OpenAI Responses API only; every request uses `store: false` and `stream: true`
@@ -69,50 +71,60 @@ go build -trimpath -o bin/codex-bridge.exe ./cmd/codex-bridge
    ./bin/codex-bridge login --no-browser
    ```
 
-2. Check the saved connection and discover the account's models.
+2. Configure Claude Code. This merges the bridge settings into the user-level
+   `~/.claude/settings.json` file and backs up an existing file before changing it.
 
    ```bash
-   ./bin/codex-bridge status
-   ./bin/codex-bridge serve
-   curl http://127.0.0.1:8787/v1/models
-   ```
-
-3. Select an available model and start the bridge.
-
-   ```bash
-   CODEX_BRIDGE_MODEL=gpt-6.1-sol ./bin/codex-bridge serve
+   ./bin/codex-bridge configure-claude
    ```
 
    PowerShell:
 
    ```powershell
-   $env:CODEX_BRIDGE_MODEL = "gpt-6.1-sol"
+   .\bin\codex-bridge.exe configure-claude
+   ```
+
+   The command respects `CLAUDE_CONFIG_DIR`, preserves unrelated settings, and can
+   be run repeatedly. If `ANTHROPIC_API_KEY` is already set in the current shell,
+   remove it before launching Claude Code because it takes precedence over the
+   configured gateway token:
+
+   ```powershell
+   Remove-Item Env:ANTHROPIC_API_KEY -ErrorAction SilentlyContinue
+   ```
+
+3. Start the bridge in one terminal.
+
+   ```bash
+   ./bin/codex-bridge serve
+   ```
+
+   PowerShell:
+
+   ```powershell
    .\bin\codex-bridge.exe serve
    ```
 
-4. Point Claude Code at the bridge. Claude Code requires a local API-key value even when bridge authentication is disabled.
+4. Start or restart Claude Code, then use `/model` to choose **Codex Haiku**,
+   **Codex Sonnet**, or **Codex Opus**.
 
    ```bash
-   export ANTHROPIC_BASE_URL=http://127.0.0.1:8787
-   export ANTHROPIC_API_KEY=local-placeholder
    claude
    ```
 
-   PowerShell:
+To inspect the active account and the tiers available from its model catalog:
 
-   ```powershell
-   $env:ANTHROPIC_BASE_URL = "http://127.0.0.1:8787"
-   $env:ANTHROPIC_API_KEY = "local-placeholder"
-   claude
-   ```
-
-When `CODEX_BRIDGE_API_KEY` is configured, use that same value as `ANTHROPIC_API_KEY` instead of the placeholder.
+```bash
+./bin/codex-bridge status
+curl http://127.0.0.1:8787/v1/models
+```
 
 ## Commands
 
 ```text
 codex-bridge login [--no-browser]
-codex-bridge serve [--address 127.0.0.1:8787] [--model MODEL]
+codex-bridge configure-claude [--settings PATH] [--base-url URL] [--auth-token TOKEN]
+codex-bridge serve [--address 127.0.0.1:8787] [--haiku-model MODEL] [--sonnet-model MODEL] [--opus-model MODEL]
 codex-bridge status
 codex-bridge logout
 codex-bridge version
@@ -122,12 +134,15 @@ codex-bridge version
 
 ## Configuration
 
-Configuration uses environment variables, with flags taking precedence for the listen address and model.
+Configuration uses environment variables, with flags taking precedence for the listen address and tier models.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `CODEX_BRIDGE_ADDRESS` | `127.0.0.1:8787` | HTTP listen address |
-| `CODEX_BRIDGE_MODEL` | `gpt-6.1-sol` | Upstream model used for all Anthropic model names |
+| `CODEX_BRIDGE_HAIKU_MODEL` | `gpt-6-luna` | Fast, efficient model behind the Haiku tier |
+| `CODEX_BRIDGE_SONNET_MODEL` | `gpt-6.1-sol` | Balanced model behind the Sonnet tier |
+| `CODEX_BRIDGE_OPUS_MODEL` | `gpt-6-astra` | Highest-capability model behind the Opus tier |
+| `CODEX_BRIDGE_MODEL` | empty | Legacy fallback for the Sonnet tier; `--model` maps all three tiers for backward compatibility |
 | `CODEX_BRIDGE_API_KEY` | empty | Protects `/v1/*`; required for non-loopback binding |
 | `CODEX_BRIDGE_CREDENTIALS` | OS user config directory | Credential JSON path |
 | `CODEX_ACCESS_TOKEN` | empty | Non-persistent token override for automation |
@@ -137,7 +152,11 @@ Configuration uses environment variables, with flags taking precedence for the l
 | `CODEX_BRIDGE_REQUEST_TIMEOUT` | `10m` | Per-inference deadline |
 | `CODEX_BRIDGE_LOG_LEVEL` | `info` | Structured log level |
 
-The bridge maps every incoming Anthropic model name to `CODEX_BRIDGE_MODEL`. This lets clients keep their normal model aliases while the operator controls the actual Codex model in one place.
+The bridge recognizes both its virtual names (`codex-haiku`, `codex-sonnet`, and
+`codex-opus`) and Claude model names containing `haiku`, `sonnet`, or `opus`.
+Unknown model IDs pass through unchanged so account-specific models discovered by
+a gateway-capable client remain usable. The inbound name is preserved in the
+Anthropic response while the resolved Codex model is sent upstream.
 
 ## API examples
 
@@ -148,7 +167,7 @@ curl http://127.0.0.1:8787/v1/messages \
   -H 'content-type: application/json' \
   -H 'x-api-key: local-placeholder' \
   -d '{
-    "model": "claude-compatible",
+    "model": "codex-sonnet",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "Explain this repository."}]
   }'

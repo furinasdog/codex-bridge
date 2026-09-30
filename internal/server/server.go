@@ -17,6 +17,7 @@ import (
 
 	"github.com/codex-bridge/codex-bridge/internal/anthropic"
 	"github.com/codex-bridge/codex-bridge/internal/config"
+	"github.com/codex-bridge/codex-bridge/internal/models"
 	"github.com/codex-bridge/codex-bridge/internal/openai"
 )
 
@@ -27,7 +28,8 @@ type Server struct {
 
 func New(cfg config.Config, tokens openai.TokenProvider, version string) *Server {
 	client := openai.NewClient(cfg.UpstreamURL, tokens, nil, cfg.ForwardUserAgent+"/"+version)
-	handler := anthropic.NewHandler(client, cfg.UpstreamModel, cfg.RequestBodyLimit, cfg.RequestTimeout)
+	modelRouter := models.NewRouter(cfg.HaikuModel, cfg.SonnetModel, cfg.OpusModel)
+	handler := anthropic.NewHandler(client, modelRouter, cfg.RequestBodyLimit, cfg.RequestTimeout)
 	router := NewRouter(cfg, handler)
 	return &Server{
 		cfg: cfg,
@@ -48,6 +50,14 @@ func NewRouter(cfg config.Config, handler *anthropic.Handler) *gin.Engine {
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+	// Claude Code may probe this legacy endpoint before its first API request.
+	// Keeping the response local avoids a misleading 404 in bridge logs.
+	router.GET("/api/hello", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.HEAD("/api/hello", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 	v1 := router.Group("/v1")
 	v1.Use(apiKey(cfg.APIKey))
 	v1.POST("/messages", handler.Messages)
@@ -62,7 +72,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	errorChannel := make(chan error, 1)
 	go func() {
-		slog.Info("server started", "address", s.cfg.Address, "model", s.cfg.UpstreamModel)
+		slog.Info("server started", "address", s.cfg.Address, "haiku_model", s.cfg.HaikuModel, "sonnet_model", s.cfg.SonnetModel, "opus_model", s.cfg.OpusModel)
 		errorChannel <- s.server.ListenAndServe()
 	}()
 	select {

@@ -13,18 +13,19 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/codex-bridge/codex-bridge/internal/auth"
+	"github.com/codex-bridge/codex-bridge/internal/models"
 	"github.com/codex-bridge/codex-bridge/internal/openai"
 )
 
 type Handler struct {
 	client           *openai.Client
-	upstreamModel    string
+	models           models.Router
 	requestBodyLimit int64
 	requestTimeout   time.Duration
 }
 
-func NewHandler(client *openai.Client, upstreamModel string, requestBodyLimit int64, requestTimeout time.Duration) *Handler {
-	return &Handler{client: client, upstreamModel: upstreamModel, requestBodyLimit: requestBodyLimit, requestTimeout: requestTimeout}
+func NewHandler(client *openai.Client, modelRouter models.Router, requestBodyLimit int64, requestTimeout time.Duration) *Handler {
+	return &Handler{client: client, models: modelRouter, requestBodyLimit: requestBodyLimit, requestTimeout: requestTimeout}
 }
 
 func (h *Handler) Messages(c *gin.Context) {
@@ -44,7 +45,7 @@ func (h *Handler) Messages(c *gin.Context) {
 	if cacheKey == "" {
 		cacheKey = requestID(c)
 	}
-	upstream, err := ConvertRequest(request, h.upstreamModel, cacheKey)
+	upstream, err := ConvertRequest(request, h.models.Resolve(request.Model), cacheKey)
 	if err != nil {
 		writeError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
@@ -97,15 +98,10 @@ func (h *Handler) Models(c *gin.Context) {
 		DisplayName string `json:"display_name,omitempty"`
 		CreatedAt   string `json:"created_at,omitempty"`
 	}
-	data := make([]modelResponse, 0, len(models))
-	for _, model := range models {
-		if model.Visibility != "" && model.Visibility != "list" {
-			continue
-		}
-		if model.Name() == "" {
-			continue
-		}
-		data = append(data, modelResponse{ID: model.Name(), Type: "model", DisplayName: model.DisplayName})
+	advertised := h.models.AdvertisedModels(models)
+	data := make([]modelResponse, 0, len(advertised))
+	for _, model := range advertised {
+		data = append(data, modelResponse{ID: model.ID, Type: "model", DisplayName: model.DisplayName})
 	}
 	firstID, lastID := "", ""
 	if len(data) > 0 {

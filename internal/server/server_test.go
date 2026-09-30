@@ -12,6 +12,7 @@ import (
 
 	"github.com/codex-bridge/codex-bridge/internal/anthropic"
 	"github.com/codex-bridge/codex-bridge/internal/config"
+	"github.com/codex-bridge/codex-bridge/internal/models"
 	"github.com/codex-bridge/codex-bridge/internal/openai"
 )
 
@@ -46,9 +47,9 @@ func TestMessagesEndToEnd(t *testing.T) {
 
 	cfg := config.Config{APIKey: "bridge-secret", AllowedOrigins: []string{"https://example.test"}}
 	client := openai.NewClient(upstream.URL, testToken{}, upstream.Client(), "test")
-	handler := anthropic.NewHandler(client, "gpt-test", 1<<20, time.Minute)
+	handler := anthropic.NewHandler(client, models.NewRouter("gpt-fast", "gpt-test", "gpt-power"), 1<<20, time.Minute)
 	router := NewRouter(cfg, handler)
-	body := []byte(`{"model":"claude-test","max_tokens":128,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"claude-sonnet-4-5","max_tokens":128,"messages":[{"role":"user","content":"hi"}]}`)
 
 	unauthorized := httptest.NewRecorder()
 	router.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body)))
@@ -72,8 +73,24 @@ func TestMessagesEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.ID != "msg_resp_1" || response.Model != "claude-test" || response.Content[0].Text != "hello" {
+	if response.ID != "msg_resp_1" || response.Model != "claude-sonnet-4-5" || response.Content[0].Text != "hello" {
 		t.Fatalf("unexpected response: %#v", response)
+	}
+}
+
+func TestClaudeHelloProbe(t *testing.T) {
+	t.Parallel()
+	cfg := config.Config{}
+	client := openai.NewClient("http://127.0.0.1", testToken{}, nil, "test")
+	handler := anthropic.NewHandler(client, models.NewRouter("fast", "balanced", "powerful"), 1<<20, time.Minute)
+	router := NewRouter(cfg, handler)
+
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest(method, "/api/hello", nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s /api/hello status = %d", method, recorder.Code)
+		}
 	}
 }
 
