@@ -13,6 +13,17 @@ let timer: number | undefined
 
 const currentRange = computed(() => data.value?.service.ranges[selectedRange.value])
 const totalTokens = computed(() => (currentRange.value?.totals.input_tokens ?? 0) + (currentRange.value?.totals.output_tokens ?? 0))
+const quotaReported = computed(() => {
+  const quota = data.value?.service.quota
+  return Boolean(quota && (
+    quota.plan_type ||
+    quota.balance != null ||
+    quota.has_credits != null ||
+    quota.unlimited != null ||
+    quota.primary.remaining_percent != null ||
+    quota.secondary.remaining_percent != null
+  ))
+})
 
 async function load() {
   try {
@@ -91,7 +102,7 @@ onBeforeUnmount(() => {
     <template v-else-if="data && currentRange">
       <section class="stats-grid">
         <article><span>{{ t('totalTokens') }}</span><strong>{{ number(totalTokens) }}</strong><small>{{ selectedRange }}</small></article>
-        <article><span>{{ t('remaining') }}</span><strong>{{ remaining(data.service.quota.primary) }}</strong><small>{{ data.service.quota.plan_type || t('unknown') }}</small></article>
+        <article><span>{{ t('remaining') }}</span><strong>{{ quotaReported ? remaining(data.service.quota.primary) : t('managedInChatGPT') }}</strong><small>{{ data.service.quota.plan_type || t('officialUsage') }}</small></article>
         <article><span>{{ t('requests') }}</span><strong>{{ number(currentRange.totals.requests, false) }}</strong><small>{{ selectedRange }}</small></article>
         <article><span>{{ t('latency') }}</span><strong>{{ number(data.service.average_latency_ms, false) }} ms</strong><small>{{ t('service') }}</small></article>
       </section>
@@ -109,7 +120,11 @@ onBeforeUnmount(() => {
       <section class="two-column">
         <article class="panel quota-panel">
           <div class="panel-heading"><div><h2>{{ t('quota') }}</h2><p>{{ data.service.quota.plan_type || t('unknown') }}</p></div><div class="quota-balance"><small>{{ t('balance') }}</small><strong>{{ creditBalance() }}</strong></div></div>
-          <div class="quota-row" v-for="item in [{ label: t('primary'), value: data.service.quota.primary }, { label: t('secondary'), value: data.service.quota.secondary }]" :key="item.label">
+          <div v-if="!quotaReported" class="quota-unreported">
+            <p>{{ t('quotaUnavailable') }}</p>
+            <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener noreferrer">{{ t('viewUsage') }} <span aria-hidden="true">↗</span></a>
+          </div>
+          <div v-else class="quota-row" v-for="item in [{ label: t('primary'), value: data.service.quota.primary }, { label: t('secondary'), value: data.service.quota.secondary }]" :key="item.label">
             <div><span>{{ item.label }}</span><strong>{{ remaining(item.value) }}</strong></div>
             <div class="meter"><i :style="{ width: `${item.value.remaining_percent ?? 0}%` }"></i></div>
             <small>{{ t('resets') }} · {{ date(item.value.reset_at) }}</small>

@@ -131,7 +131,9 @@ checkout already includes the generated assets, so Go-only builds also work.
    Subscription windows and optional credit information are collected from
    Codex response headers or `codex.rate_limits` stream events. Plans without
    separately purchased credits are shown as having no extra credits rather
-   than an unknown balance.
+   than an unknown balance. If the upstream connection does not report quota
+   metadata, the dashboard links to ChatGPT's authoritative usage page instead
+   of presenting a guessed allowance.
 
 4. Start or restart Claude Code, then use `/model` to choose **Codex Haiku**,
    **Codex Sonnet**, or **Codex Opus**.

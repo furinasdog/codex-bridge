@@ -29,3 +29,4 @@ All notable changes to this project will be documented in this file. The format 
 - Produce the native `.exe` filename from `make` on Windows and avoid unnecessary dashboard rebuilds.
 - Read Codex subscription windows and credit state from `codex.rate_limits` stream events when response headers omit them.
 - Give input and output token series independent chart scales so small output totals remain visible.
+- Replace unknown quota placeholders with an official ChatGPT usage link when the SIWC upstream reports no limit metadata.

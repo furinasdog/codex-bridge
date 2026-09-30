@@ -45,8 +45,10 @@ Codex plan, credit, and rate-window values are captured from response headers
 and `codex.rate_limits` stream events when OpenAI provides them. Missing values
 remain unknown; the bridge does not estimate subscription balance. Accounts
 without separately purchased credits are distinguished from accounts whose
-credit state was not reported. OAuth tokens and request content never enter the
-telemetry store or dashboard response.
+credit state was not reported. The Sign in with ChatGPT flow does not expose a
+documented quota API to OSS clients, so missing quota metadata is never
+estimated; the dashboard directs users to ChatGPT Settings instead. OAuth
+tokens and request content never enter the telemetry store or dashboard response.
 
 ## Authentication lifecycle
 

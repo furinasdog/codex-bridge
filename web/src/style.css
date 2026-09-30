@@ -66,6 +66,10 @@ button { font: inherit; }
 .meter { height: 4px; margin: 13px 0 9px; background: #ebece8; overflow: hidden; }
 .meter i { display: block; height: 100%; background: #287c5b; }
 .quota-row small { color: #898d87; font-size: 11px; }
+.quota-unreported { min-height: 164px; padding: 28px 22px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 18px; }
+.quota-unreported p { max-width: 440px; margin: 0; color: #686c66; font-size: 13px; line-height: 1.65; }
+.quota-unreported a { color: #196b4b; font-size: 13px; font-weight: 600; text-decoration: none; border-bottom: 1px solid #9cc5b5; padding-bottom: 2px; }
+.quota-unreported a:hover { color: #124d37; border-color: #124d37; }
 .service-panel dl { margin: 0; padding: 8px 22px; }
 .service-panel dl div { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #ecece8; }
 .service-panel dl div:last-child { border-bottom: 0; }
