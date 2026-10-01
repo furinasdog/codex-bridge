@@ -43,12 +43,12 @@ real IDs. The Codex inference endpoint remains authoritative for account access.
 ## Claude Code setup
 
 `codex-bridge configure-claude` merges the base URL, Bearer authentication token,
-three real default model IDs, display names, and a `modelPicker` lineup into
-Claude Code's user-level `settings.json`. Each generated row carries a `behavesAs` mapping so
-Claude Code applies a known capability profile without warning about an unknown
-model. Legacy `codex-haiku`, `codex-sonnet`, and `codex-opus` entries are migrated
-when configuration is next run. Existing picker rows and unrelated keys are preserved, an existing file
-is backed up before modification, and an invalid JSON file is left untouched.
+three real default model IDs, display names, and `CLAUDE_CODE_MAX_CONTEXT_TOKENS=272000`
+into Claude Code's user-level `settings.json`. It does not add a `modelPicker`,
+so Claude Code retains its normal model and Auto mode behavior. Existing settings,
+incl. a user-authored picker, are preserved; legacy `codex-haiku`, `codex-sonnet`,
+and `codex-opus` entries are migrated when configuration is next run. An existing
+file is backed up before modification, and an invalid JSON file is left untouched.
 The command uses `CLAUDE_CONFIG_DIR` when set and otherwise uses
 `~/.claude/settings.json`.
 

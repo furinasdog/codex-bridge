@@ -14,7 +14,7 @@ The design follows the provider and protocol-adapter separation used by [`@earen
 - `POST /v1/messages/count_tokens` for client-side context estimates
 - Configured Codex model discovery through `GET /v1/models`
 - Native Haiku, Sonnet, and Opus choices that use real upstream model IDs end to end
-- Safe, idempotent Claude Code `settings.json` configuration with automatic backups and `modelPicker` capability mappings
+- Safe, idempotent Claude Code `settings.json` configuration with automatic backups and an explicit 272k context window
 - Embedded Vue dashboard with English and Chinese UI, dual-scale 1/5/12/24-hour usage charts, service health, and Codex quota metadata
 - OAuth 2.0 authorization code flow with PKCE, state, nonce, and OIDC signature validation
 - Automatic, concurrency-safe access-token refresh and rotating refresh-token persistence
@@ -135,8 +135,8 @@ checkout already includes the generated assets, so Go-only builds also work.
    metadata, the dashboard links to ChatGPT's authoritative usage page instead
    of presenting a guessed allowance.
 
-4. Start or restart Claude Code, then use `/model` to choose **Codex Haiku**,
-   **Codex Sonnet**, or **Codex Opus**.
+4. Start or restart Claude Code. The bridge configures the three Codex tiers
+   as Claude Code defaults while leaving the built-in `/model` picker intact.
 
    ```bash
    claude

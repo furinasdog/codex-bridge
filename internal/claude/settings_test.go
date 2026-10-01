@@ -60,28 +60,20 @@ func TestConfigureMergesAndBacksUpSettings(t *testing.T) {
 		t.Fatal("ANTHROPIC_API_KEY must be removed from file-scoped settings")
 	}
 	if _, exists := environment["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"]; exists {
-		t.Fatal("gateway discovery must be removed when modelPicker is configured")
+		t.Fatal("gateway discovery must be removed")
 	}
 	if environment["ANTHROPIC_DEFAULT_HAIKU_MODEL"] != "fast" ||
 		environment["ANTHROPIC_DEFAULT_SONNET_MODEL"] != "balanced" ||
 		environment["ANTHROPIC_DEFAULT_OPUS_MODEL"] != "powerful" {
 		t.Fatalf("tier aliases were not configured: %#v", environment)
 	}
+	if environment["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] != "272000" {
+		t.Fatalf("context window was not configured: %#v", environment)
+	}
 	picker := root["modelPicker"].(map[string]any)
-	if picker["replaceBuiltInOptions"] != true {
-		t.Fatalf("modelPicker must replace built-in models: %#v", picker)
-	}
 	rows := picker["options"].([]any)
-	if len(rows) != 4 || rows[0].(map[string]any)["model"] != "foreign-model" {
-		t.Fatalf("foreign modelPicker rows were not preserved: %#v", rows)
-	}
-	wantModels := []string{"fast", "balanced", "powerful"}
-	wantBehaviors := []string{"claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-6"}
-	for index := range wantModels {
-		row := rows[index+1].(map[string]any)
-		if row["model"] != wantModels[index] || row["behavesAs"] != wantBehaviors[index] {
-			t.Fatalf("unexpected generated picker row: %#v", row)
-		}
+	if len(rows) != 1 || rows[0].(map[string]any)["model"] != "foreign-model" {
+		t.Fatalf("existing modelPicker was changed: %#v", picker)
 	}
 
 	second, err := Configure(options)
@@ -90,6 +82,29 @@ func TestConfigureMergesAndBacksUpSettings(t *testing.T) {
 	}
 	if second.Changed || second.BackupPath != "" {
 		t.Fatalf("idempotent configuration unexpectedly changed settings: %#v", second)
+	}
+}
+
+func TestConfigureDoesNotAddModelPicker(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "settings.json")
+	_, err := Configure(ConfigureOptions{
+		Path: path, BaseURL: "http://127.0.0.1:8787", AuthToken: "token",
+		Models: models.NewCatalog("fast", "balanced", "powerful"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	configured, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root map[string]any
+	if err := json.Unmarshal(configured, &root); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := root["modelPicker"]; exists {
+		t.Fatalf("configure-claude added modelPicker: %#v", root["modelPicker"])
 	}
 }
 
