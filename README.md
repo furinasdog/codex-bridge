@@ -20,7 +20,6 @@ The design follows the provider and protocol-adapter separation used by [`@earen
 - Automatic, concurrency-safe access-token refresh and rotating refresh-token persistence
 - Public OpenAI Responses API only; every request uses `store: false` and `stream: true`
 - Localhost-only default, optional bridge API key, explicit CORS allowlist, body limits, and graceful shutdown
-- Colored Gin request logs, readable service logs, request IDs, and no credential logging
 
 ## Architecture
 
@@ -80,26 +79,26 @@ checkout already includes the generated assets, so Go-only builds also work.
 1. Sign in. This opens the system browser and listens temporarily on a random `127.0.0.1` callback port.
 
    ```bash
-   ./bin/codex-bridge login
+   ./codex-bridge login
    ```
 
    In a headless environment, print the URL instead:
 
    ```bash
-   ./bin/codex-bridge login --no-browser
+   ./codex-bridge login --no-browser
    ```
 
 2. Configure Claude Code. This merges the bridge settings into the user-level
    `~/.claude/settings.json` file and backs up an existing file before changing it.
 
    ```bash
-   ./bin/codex-bridge configure-claude
+   ./codex-bridge configure-claude
    ```
 
    PowerShell:
 
    ```powershell
-   .\bin\codex-bridge.exe configure-claude
+   .\codex-bridge.exe configure-claude
    ```
 
    The command respects `CLAUDE_CONFIG_DIR`, preserves unrelated settings, and can
@@ -117,13 +116,13 @@ checkout already includes the generated assets, so Go-only builds also work.
 3. Start the bridge in one terminal.
 
    ```bash
-   ./bin/codex-bridge serve
+   ./codex-bridge serve
    ```
 
    PowerShell:
 
    ```powershell
-   .\bin\codex-bridge.exe serve
+   .\codex-bridge.exe serve
    ```
 
    Open `http://127.0.0.1:8787/` for the local dashboard. Its metrics endpoint
@@ -145,7 +144,7 @@ checkout already includes the generated assets, so Go-only builds also work.
 To inspect the active account and the bridge's configured tiers:
 
 ```bash
-./bin/codex-bridge status
+./codex-bridge status
 curl http://127.0.0.1:8787/v1/models
 ```
 
@@ -204,41 +203,6 @@ curl http://127.0.0.1:8787/v1/messages \
 ```
 
 For streaming, add `"stream": true`; the response is Anthropic-style server-sent events.
-
-## Security notes
-
-- The default listener is loopback-only. The process refuses non-loopback addresses unless `CODEX_BRIDGE_API_KEY` is set.
-- OAuth credentials are stored atomically under the user's OS configuration directory. The directory and files request owner-only permissions; on Windows they also inherit the current user's profile ACL.
-- Tokens are never returned by HTTP endpoints or written to logs.
-- Browser access is disabled unless an origin is explicitly listed in `CODEX_BRIDGE_ALLOWED_ORIGINS`.
-- Treat the host running this service as trusted. This bridge is not designed as a multi-tenant hosted gateway.
-
-Read [SECURITY.md](SECURITY.md) before exposing the service beyond localhost.
-
-## Development
-
-```bash
-npm ci --prefix web
-npm run --prefix web typecheck
-npm run --prefix web build
-go test ./...
-go vet ./...
-go test -race ./...   # supported when the platform has CGO/race support
-```
-
-The test suite uses local `httptest` servers and does not require OpenAI credentials.
-
-## Releases
-
-Pushing a semantic version tag such as `v1.0.0` runs the release workflow. It
-builds amd64 and arm64 archives for Linux, macOS, and Windows, publishes a
-`SHA256SUMS` file, and creates a GitHub Release with automatically generated
-release notes.
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
 
 ## Project status
 
