@@ -3,6 +3,7 @@ package telemetry
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -12,7 +13,9 @@ import (
 
 func TestStoreBuildsRangesAndPersists(t *testing.T) {
 	t.Parallel()
-	now := time.Date(2026, 9, 30, 8, 0, 0, 0, time.UTC)
+	// New prunes persisted events against the wall clock, so keep this fixture
+	// within the retention window regardless of when the test runs.
+	now := time.Now().UTC()
 	path := filepath.Join(t.TempDir(), "metrics.json")
 	store := New(path)
 	store.Record(Event{Timestamp: now.Add(-30 * time.Minute), Model: "gpt-test", InputTokens: 120, OutputTokens: 30, DurationMS: 200, Success: true})
@@ -32,6 +35,31 @@ func TestStoreBuildsRangesAndPersists(t *testing.T) {
 	reloaded := New(path).Snapshot(now)
 	if got := reloaded.Ranges["5h"].Totals.OutputTokens; got != 40 {
 		t.Fatalf("persisted output tokens = %d, want 40", got)
+	}
+}
+
+func TestStoreReloadPrunesExpiredEvents(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	path := filepath.Join(t.TempDir(), "metrics.json")
+	saved := persisted{Events: []Event{
+		{Timestamp: now.Add(-retention - time.Hour), OutputTokens: 100, Success: true},
+		{Timestamp: now.Add(-time.Hour), OutputTokens: 40, Success: true},
+	}}
+	data, err := json.Marshal(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	store := New(path)
+	if got := len(store.events); got != 1 {
+		t.Fatalf("retained events = %d, want 1", got)
+	}
+	if got := store.Snapshot(now).Ranges["24h"].Totals.OutputTokens; got != 40 {
+		t.Fatalf("retained output tokens = %d, want 40", got)
 	}
 }
 
